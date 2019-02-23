@@ -1,0 +1,12 @@
+{
+  "firstname": "Donald",
+  "lastname": "Duck",
+  "title": "Comic Hero",
+  "age" : "90",
+  "streetaddress": "Donald Duck Way 192587902834570298347 Disneyland, Anaheim, CA",
+  "relatives" [
+    {"firstname": "Tupu", "lastname": "Duck"},
+    {"firstname": "Hupu", "lastname": "Duck"},
+    {"firstname": "Lupu", "lastname": "Duck"},
+  ]
+}
