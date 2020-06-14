@@ -9,6 +9,10 @@
 * (Not just x-www-form-urlencoded or multipart/form-data) - Still a bit unclear and unpractical
 * https://pastebin.com/SjVCkKAW
 * https://stackoverflow.com/questions/29700380/handling-a-post-request-with-libmicrohttpd - MHD POST Info
+* # Refererences
+* 
+* - See also libulfius in Ubuntu: apt-get libulfius2.2
+* - https://github.com/babelouest/ulfius
 */
 
 #include <sys/types.h>
@@ -21,6 +25,7 @@
 #include <string.h>
 #include <stdlib.h>
 
+#include <unistd.h> // getcwd(), access()
 // MUST be min 256
 // #define POSTBUFFERSIZE  512
 #define POSTBUFFERSIZE  256
@@ -42,6 +47,8 @@ struct connection_info_struct {
   int size;
   int used;
 };
+
+char docroot[256] = {0};
 
 char * proc_list_json(int flags);
 char * proc_list_json2(int flags);
@@ -288,20 +295,62 @@ if (!*con_cls) {
   return send_page (connection, "Error !!!", MHD_HTTP_OK);
   // return ret;
 */
+// #include <sys/types.h>
+#include <fcntl.h> // open()
+#include <sys/stat.h> // struct stat
+/** Try to resolve url to a static file and return request for it.
+* @param url - Request URL to test for static content
+* @todo: Check suffix and try to map to appropriate mime-type
+*/
+struct MHD_Response * trystatic(const char * url) {
+  char urlfile[256] = {0};
+  if (!strcmp(url, "/")) { url = "/index.html"; }
+  sprintf(urlfile, "%s/%s", docroot, (char*)url);
+  printf("Try static file: %s\n", urlfile);
+  int acc = access( urlfile, F_OK );
+  if (acc == -1) { return 0; }
+  int fd = open(urlfile, O_RDONLY);
+  if (fd < 0) { return 0; }
+  struct stat statbuf = {0};
+  int sok = fstat(fd, &statbuf);
+  if (sok < 0) { return 0; }
+  uint64_t size = statbuf.st_size; // off_t
+  printf("Ready to create response from fd: %d (%ld)\n", fd, size);
+  struct MHD_Response * response = MHD_create_response_from_fd(size, fd);
+  // Extract suffix
+  char * suff = strrchr(url, '.');
+  if (suff) { printf("Found suffix: '%s'\n", ++suff); }
+  char * defmime = "text/plain";
+  //MHD_add_response_header (response, "Content-Type", defmime);
+  // close(fd);
+  return response;
+}
+/** Create OS Process listing.
+* Example of simple GET handling of HTTP Request.
+*/
 int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
   // const char *page  = "<html><body>Hello, browser!</body></html>";
   struct MHD_Response * response = NULL;
   int ret; // = MHD_YES;
-  printf("URL(%s): %s (Datasize: %lu)\n", method, url, *upload_data_size);
+  response = trystatic(url);
+  if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
+  char * errpage = "{\"status\": \"err\"}"; // TODO: produce as jansson D.S.
+  printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
+  // struct MHD_Response * create_proclisting_json(const char * url) {
   char * page = proc_list_json2(0); // Produce Content
-  // MHD_add_response_header (response, "Content-Type", "application/json");
+  if (!page || !*page) { printf("Failed to produce content for client !\n"); }
+  
   response = MHD_create_response_from_buffer (
     strlen (page), (void*) page, MHD_RESPMEM_PERSISTENT); // MHD_RESPMEM_MUST_COPY
+  MHD_add_response_header (response, "Content-Type", "application/json");
+  //  return request; }
+  QUEUE_REQUEST:
   ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
-  MHD_destroy_response(response);
+  
+  if (response) { MHD_destroy_response(response); }
   return ret;			  
 }
 
@@ -310,19 +359,28 @@ void * req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls
   con_info_destroy((CONNINFO *) *con_cls);
   return NULL;
 }
-
+/** Main for Micro HTTP Daemon app.
+* 5th param to MHD_start_daemon() defines the main connection handler
+* (that should do respecite dispatching if app handles many different actions).
+*/
 int main (int argc, char *argv[]) {
   struct MHD_Daemon * mhd = NULL;
-  if (argc < 2) { printf("No args, pass port."); return 1; }
+  if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
   int port = atoi(argv[1]);
+  
+  getcwd(docroot, sizeof(docroot));
+  printf("Docroot: %s\n", docroot);
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
-    &answer_to_connection, NULL,
-    MHD_OPTION_NOTIFY_COMPLETED, req_term_cb, NULL,
+    // NOTE: Connection handler: answer_to_connection*
+    &answer_to_connection0, NULL,
+    MHD_OPTION_NOTIFY_COMPLETED,
+    NULL, // req_term_cb,
+    NULL,
     MHD_OPTION_END); 
   if (NULL == mhd) {printf("Could not start\n");return 2;}
-  printf("Starting Micro HTTP daemon at port %d\n", port);
+  printf("Starting Micro HTTP daemon at port %d (Try: http://localhost:%d/)\n", port, port);
   (void) getchar ();
   MHD_stop_daemon (mhd);
   return 0;
