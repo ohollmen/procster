@@ -13,6 +13,11 @@
 * 
 * - See also libulfius in Ubuntu: apt-get libulfius2.2
 * - https://github.com/babelouest/ulfius
+*
+* # TODO
+* - Consider where "tree" model can be created - at server or client ?
+*   - In either 1 or 2 pass algorithm (or between) ? Does sorting help (if processes overflowed 64K (general case), not)
+*   - Need hashtables in C for server side tree structuring ?
 */
 
 #include <sys/types.h>
@@ -40,9 +45,9 @@ struct connection_info_struct {
   // const char *answerstring;
   // int answercode;
   int debug;
-  int is_parsing;
-  int contlen;
-  char * conttype;
+  int is_parsing; /**< State of parsing (INITED =0, PARSING, COMPLETE) */
+  int contlen;    /**< Currently stored content length */
+  char * conttype; /**< Content type */
   char * postdata;
   int size;
   int used;
@@ -73,6 +78,7 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 static int send_page (struct MHD_Connection *connection,  const char* page, int status_code) {
   int ret;
   struct MHD_Response *response;
+  // TODO: Try to avoid copies, make configurable
   response = MHD_create_response_from_buffer (strlen (page), (void*) page, MHD_RESPMEM_MUST_COPY);
   if (!response) { return MHD_NO; }
   // Correct place for setting headers
@@ -85,7 +91,9 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
 #define con_info_need_mem(con_info, cnt) (con_info->used + cnt + 1)
 
 /** Destroy POST Request info freeing all allocated memory.
-* It is recommended that this is called in 
+* It is recommended that this is called in the MHD main handler or req_term_cb() (which ? Both passed to MHD_start_daemon()
+* as 5th and 8th params respectively).
+* 
 */
 void con_info_destroy(CONNINFO *con_info) { free(con_info->postdata); free(con_info->conttype); free(con_info); return; }
 /** Allocate */
@@ -339,7 +347,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   char * errpage = "{\"status\": \"err\"}"; // TODO: produce as jansson D.S.
   printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
   // struct MHD_Response * create_proclisting_json(const char * url) {
-  char * page = proc_list_json2(0); // Produce Content
+  char * page = proc_list_json2(0); // Produce Process list content
   if (!page || !*page) { printf("Failed to produce content for client !\n"); }
   
   response = MHD_create_response_from_buffer (
