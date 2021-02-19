@@ -48,7 +48,7 @@ struct connection_info_struct {
   int is_parsing; /**< State of parsing (INITED =0, PARSING, COMPLETE) */
   int contlen;    /**< Currently stored content length */
   char * conttype; /**< Content type */
-  char * postdata;
+  char * postdata; /**< Body Content */
   int size;
   int used;
 };
@@ -73,14 +73,17 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
   return MHD_YES;
 }
 /** Generic string content sending.
+* @param connection MHD_Connection / single request (See MHD Docs)
+* @return Return the kind of values that MHD request handler returns (MHD_NO, ...).
 * @todo Add len for binary data (allow -1 to measure string)
 */
 static int send_page (struct MHD_Connection *connection,  const char* page, int status_code) {
   int ret;
   struct MHD_Response *response;
-  // TODO: Try to avoid copies, make configurable
+  // TODO: Try to avoid copies, make memmode configurable
   response = MHD_create_response_from_buffer (strlen (page), (void*) page, MHD_RESPMEM_MUST_COPY);
   if (!response) { return MHD_NO; }
+  if (!status_code) { status_code = 200; }
   // Correct place for setting headers
   // MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE, "text/html");
   ret = MHD_queue_response (connection, status_code, response);
@@ -96,7 +99,10 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
 * 
 */
 void con_info_destroy(CONNINFO *con_info) { free(con_info->postdata); free(con_info->conttype); free(con_info); return; }
-/** Allocate */
+/** Allocate CONNINFO for POST Parsing.
+ * CONNINFO is used to keep track of body retrieval / buffering state across multiple calls
+ * to 
+ */
 CONNINFO *con_info_create(struct MHD_Connection *connection) {
   const char * ct   = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-type");
   const char * clen = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-length");
@@ -104,8 +110,8 @@ CONNINFO *con_info_create(struct MHD_Connection *connection) {
   
   int initsize = 128; // Content buffer con_info.postdata
   
-  // TODO: Possibly Mark content-type to con_info
-  CONNINFO * con_info = calloc (1, sizeof (CONNINFO));
+  // Mark content-type and content-length to con_info
+  CONNINFO * con_info = (CONNINFO *)calloc (1, sizeof (CONNINFO));
   if (!con_info) { return NULL; } // 0
   // NEW:
   con_info->contlen  = atoi(clen);
@@ -229,7 +235,7 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   return ret;
 }
 
-/** Generic POST Body parsing.
+/** Generic POST Handler with POST Body parsing.
 * See: MHD_post_process and MHD_create_post_processor
 * MHD_ContentReaderFreeCallback
 * MHD_RequestCompletedCallback set by  MHD_OPTION_NOTIFY_COMPLETED (2 pointer params)
@@ -308,6 +314,7 @@ if (!*con_cls) {
 #include <sys/stat.h> // struct stat
 /** Try to resolve url to a static file and return request for it.
 * @param url - Request URL to test for static content
+* @return MHD_Response (pointer) for static file or 
 * @todo: Check suffix and try to map to appropriate mime-type
 */
 struct MHD_Response * trystatic(const char * url) {
@@ -342,18 +349,29 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   // const char *page  = "<html><body>Hello, browser!</body></html>";
   struct MHD_Response * response = NULL;
   int ret; // = MHD_YES;
+  int memmode = MHD_RESPMEM_PERSISTENT; // enum MHD_ResponseMemoryMode (MHD_RESPMEM_*: PERSISTENT, MUST_FREE, MUST_COPY )
+  char * ctype = "text/plain";
+  char * page = NULL;
   response = trystatic(url);
   if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
-  char * errpage = "{\"status\": \"err\"}"; // TODO: produce as jansson D.S.
+  char * errpage = "{\"status\": \"err\", \"msg\": \"Error: ...\"}"; // TODO: produce as jansson D.S.
   printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
-  // struct MHD_Response * create_proclisting_json(const char * url) {
-  char * page = proc_list_json2(0); // Produce Process list content
-  if (!page || !*page) { printf("Failed to produce content for client !\n"); }
-  
+ if (!strncmp(url, "/procs", 6)) {
+  //
+  ctype = "application/json";
+  // struct MHD_Response * create_proclisting_json2(const char * url) {
+  page = proc_list_json2(0); // Produce Process list content
+  if (!page || !*page) {
+    printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
+  }
+ }
+  // Check "page" once more 
+  if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
   response = MHD_create_response_from_buffer (
-    strlen (page), (void*) page, MHD_RESPMEM_PERSISTENT); // MHD_RESPMEM_MUST_COPY
-  MHD_add_response_header (response, "Content-Type", "application/json");
+    strlen (page), (void*) page, memmode); // MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY
+  MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
   //  return request; }
+  
   QUEUE_REQUEST:
   ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
@@ -367,7 +385,7 @@ void * req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls
   con_info_destroy((CONNINFO *) *con_cls);
   return NULL;
 }
-/** Main for Micro HTTP Daemon app.
+/** Main for (Micro HTTP Daemon) process app.
 * 5th param to MHD_start_daemon() defines the main connection handler
 * (that should do respecite dispatching if app handles many different actions).
 */
@@ -376,7 +394,8 @@ int main (int argc, char *argv[]) {
   if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
   int port = atoi(argv[1]);
   
-  getcwd(docroot, sizeof(docroot));
+  char * docr = getcwd(docroot, sizeof(docroot));
+  if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
   printf("Docroot: %s\n", docroot);
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
@@ -387,7 +406,7 @@ int main (int argc, char *argv[]) {
     NULL, // req_term_cb,
     NULL,
     MHD_OPTION_END); 
-  if (NULL == mhd) {printf("Could not start\n");return 2;}
+  if (NULL == mhd) { printf("Could not start MHD\n");return 3; }
   printf("Starting Micro HTTP daemon at port %d (Try: http://localhost:%d/)\n", port, port);
   (void) getchar ();
   MHD_stop_daemon (mhd);
