@@ -1,20 +1,26 @@
 /**
 * gcc -o procserver procserver.c -lmicrohttpd
 * 
-* # Additional info
-* Google microhttpd examples or see (in Debian/Ubuntu) /usr/share/doc/libmicrohttpd-dev/examples/.
-* Response from file:
-*     //response = MHD_create_response_from_fd_at_offset64 (sbuf.st_size, fd, 0);
-* https://lists.gnu.org/archive/html/libmicrohttpd/2014-10/msg00006.html - Important notes on parsing ANY POST body
+* # Info on MHD development
+* 
+* - Google microhttpd examples
+* - see (in Debian/Ubuntu) /usr/share/doc/libmicrohttpd-dev/examples/.
+* - Response from file:
+*     - //response = MHD_create_response_from_fd_at_offset64 (sbuf.st_size, fd, 0);
+* - https://lists.gnu.org/archive/html/libmicrohttpd/2014-10/msg00006.html
+*   - Important notes on parsing ANY POST body
 * (Not just x-www-form-urlencoded or multipart/form-data) - Still a bit unclear and unpractical
-* https://pastebin.com/SjVCkKAW
-* https://stackoverflow.com/questions/29700380/handling-a-post-request-with-libmicrohttpd - MHD POST Info
-* # Refererences
+* - MHD official PDF Tutorial: https://www.gnu.org/software/libmicrohttpd/tutorial.pdf
+* - https://pastebin.com/SjVCkKAW
+* - https://stackoverflow.com/questions/29700380/handling-a-post-request-with-libmicrohttpd - MHD POST Info
+* 
+* # Info on Ulfius
 * 
 * - See also libulfius in Ubuntu: apt-get libulfius2.2
 * - https://github.com/babelouest/ulfius
 *
 * # TODO
+*
 * - Consider where "tree" model can be created - at server or client ?
 *   - In either 1 or 2 pass algorithm (or between) ? Does sorting help (if processes overflowed 64K (general case), not)
 *   - Need hashtables in C for server side tree structuring ?
@@ -24,7 +30,7 @@
 #include <sys/select.h>
 #include <sys/socket.h>
 
-#include <microhttpd.h>
+#include <microhttpd.h> //  /usr/include/microhttpd.h
 #define MHD_PLATFORM_H
 #include <stdio.h>
 #include <string.h>
@@ -254,7 +260,7 @@ int answer_to_connection1 (void *cls, struct MHD_Connection *connection,
   if (!pret) { return MHD_NO; } // Fatal error - terminate request
   if (!*con_cls) { fprintf(stderr, "No *con_cls - should never happen!\n"); return MHD_NO; } // assert
   con_info = *con_cls; 
-  if (con_info->is_parsing < 2) { return MHD_YES; }
+  if (con_info->is_parsing < 2) { return MHD_YES; } // 2 = COMPLETE
   // *con_cls = NULL; /// NOT Needed if handled by (See: ...) MHD_OPTION_NOTIFY_COMPLETED
   ////////// Send the response the most ordinary way /////////////
   struct MHD_Response *
@@ -340,6 +346,22 @@ struct MHD_Response * trystatic(const char * url) {
   // close(fd);
   return response;
 }
+/** Check HTTP Basic credentials.
+
+*/
+int basic_creds_ok(struct MHD_Connection *connection) {
+  char * pass = NULL;
+  char * user = MHD_basic_auth_get_username_password (connection, &pass);
+  // Validate user,pass minimum validity requirements.
+  if (!user || strlen(user) < 3) { return 0; }
+  if (!pass || strlen(pass) < 5) { return 0; }
+  // Test
+  if (strcmp(user, "test") || strcmp(pass, "test")) { return 0; }
+  // Real check from user,pass hashtable
+  // char * corrpass = g_hashtab_lookup(creds, user);
+  // if (strcmp(corrpass, pass)) { return 0; }
+  return 1;
+}
 /** Create OS Process listing.
 * Example of simple GET handling of HTTP Request.
 */
@@ -356,15 +378,16 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
   char * errpage = "{\"status\": \"err\", \"msg\": \"Error: ...\"}"; // TODO: produce as jansson D.S.
   printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
- if (!strncmp(url, "/procs", 6)) {
-  //
-  ctype = "application/json";
-  // struct MHD_Response * create_proclisting_json2(const char * url) {
-  page = proc_list_json2(0); // Produce Process list content
-  if (!page || !*page) {
-    printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
+  // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
+  if (!strncmp(url, "/procs", 6)) {
+    //
+    ctype = "application/json";
+    // struct MHD_Response * create_proclisting_json2(const char * url) {
+    page = proc_list_json2(0); // Produce Process list content
+    if (!page || !*page) {
+      printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
+    }
   }
- }
   // Check "page" once more 
   if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
   response = MHD_create_response_from_buffer (
@@ -379,15 +402,20 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   if (response) { MHD_destroy_response(response); }
   return ret;			  
 }
-
-void * req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, enum MHD_RequestTerminationCode toe) {
+/** Post request Callback launched by MHD after completing request.
+* 
+*/
+void req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, enum MHD_RequestTerminationCode toe) {
   fprintf(stderr, "Request Terminated (con_cls=%p, cls=%p) !\n", *con_cls, cls);
+  if (! con_cls || !*con_cls) { return; } // Important. See manual p. 18
   con_info_destroy((CONNINFO *) *con_cls);
-  return NULL;
+  *con_cls = NULL; // Comm. to MHD
+  // NOT: return NULL;
+  return;
 }
 /** Main for (Micro HTTP Daemon) process app.
 * 5th param to MHD_start_daemon() defines the main connection handler
-* (that should do respecite dispatching if app handles many different actions).
+* (that should do respective dispatching if app handles many different actions).
 */
 int main (int argc, char *argv[]) {
   struct MHD_Daemon * mhd = NULL;
@@ -403,12 +431,12 @@ int main (int argc, char *argv[]) {
     // NOTE: Connection handler: answer_to_connection*
     &answer_to_connection0, NULL,
     MHD_OPTION_NOTIFY_COMPLETED,
-    NULL, // req_term_cb,
+    NULL, // req_term_cb, MHD Manual p. 18 ()
     NULL,
     MHD_OPTION_END); 
-  if (NULL == mhd) { printf("Could not start MHD\n");return 3; }
+  if (NULL == mhd) { printf("Could not start MHD (check if port %d is taken)\n", port);return 3; }
   printf("Starting Micro HTTP daemon at port %d (Try: http://localhost:%d/)\n", port, port);
   (void) getchar ();
-  MHD_stop_daemon (mhd);
+  //MHD_stop_daemon (mhd);
   return 0;
 }
