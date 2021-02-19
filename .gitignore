@@ -4,3 +4,5 @@ procserver
 proctest
 proctest.json
 proctest.o
+doxydocs
+node_modules
