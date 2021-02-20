@@ -12,10 +12,17 @@ GUI to graphically get hang of what data Procsster can provide.
 
 ## Procster Design Rationale
 
-Procster is written on top of 3 main, reusable footings:
+Procster is written on top of 4 main, reusable footings:
 - procps - Linux process lister API, also used by "ps" and "top" utilities
 - microhttpd - Lightweight, standalone HTTP server
+- glib - For helper data structures
 - libjansson - JSON library to parse and serialize JSON
+
+Choosing a veru slim "embedded" web server (Instead of general purpose
+web server like Apache or NginX) and efficient libraries for other tasks
+keeps the memory footprint on the system "unnoticable".
+As such Procster should be easily runnable on SBC systems like RaspberryPi,
+Beaglebone, Odroid, etc.
 
 ## Procster and security
 
@@ -36,6 +43,7 @@ Install dependencies (Example on Ubuntu 18.04)
 ```
 # For Processlister ...
 sudo apt-get install libprocps6 libpropcs-dev libjansson4 libjansson-dev
+sudo apt-get install libglib2.0-dev
 # For Microhttpd
 sudo apt-get install libmicrohttpd12 libmicrohttpd-dev
 ```
