@@ -24,6 +24,23 @@
 * - Consider where "tree" model can be created - at server or client ?
 *   - In either 1 or 2 pass algorithm (or between) ? Does sorting help (if processes overflowed 64K (general case), not)
 *   - Need hashtables in C for server side tree structuring ?
+* - Use json_t *json_deep_copy(const json_t *value) or just parse template string for error message
+* # Mem leakges
+* Poll each 3000 ms
+* Case 1
+* - Linear mode, one proc_t node in stack
+* - JSON un-freed (No json_decref()), Use json_object_set, NOT json_object_set_new
+* - Response memmode MHD_RESPMEM_PERSISTENT
+* - 205MB/2:30 82MB / hr
+* Case 2
+* - Set serialized JSON string "page" memmode = MHD_RESPMEM_MUST_FREE;
+* - 45MB / 35min 52MB/43 min 55MB/45min 73MB/ 1hr => (derived) 183MB/2.5hr 73.3MB/hr
+* Case 3
+* - Additionally Use
+*   - json_object_set_new() (OLD: json_object_set) on obj member additions
+*     - Better yet: json_object_set_new_nocheck() - No key UTF-8 check
+*   - json_array_append_new() (OLD: json_array_append()) on array add
+*   - json_decref(obj)
 */
 
 #include <sys/types.h>
@@ -37,6 +54,10 @@
 #include <stdlib.h>
 
 #include <unistd.h> // getcwd(), access()
+#include <jansson.h> // For config
+
+#include "proclister.h"
+
 // MUST be min 256
 // #define POSTBUFFERSIZE  512
 #define POSTBUFFERSIZE  256
@@ -59,10 +80,11 @@ struct connection_info_struct {
   int used;
 };
 
+
 char docroot[256] = {0};
 
 char * proc_list_json(int flags);
-char * proc_list_json2(int flags);
+// char * proc_list_json2(int flags);
 /** 
 See: https://www.gnu.org/software/libmicrohttpd/tutorial.html#Processing-POST-data
 MHD_PostDataIterator
@@ -318,7 +340,7 @@ if (!*con_cls) {
 // #include <sys/types.h>
 #include <fcntl.h> // open()
 #include <sys/stat.h> // struct stat
-/** Try to resolve url to a static file and return request for it.
+/** Try to resolve url to a static file and return response for it.
 * @param url - Request URL to test for static content
 * @return MHD_Response (pointer) for static file or 
 * @todo: Check suffix and try to map to appropriate mime-type
@@ -374,6 +396,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   int memmode = MHD_RESPMEM_PERSISTENT; // enum MHD_ResponseMemoryMode (MHD_RESPMEM_*: PERSISTENT, MUST_FREE, MUST_COPY )
   char * ctype = "text/plain";
   char * page = NULL;
+  size_t jflags = JSON_INDENT(2);
   response = trystatic(url);
   if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
   char * errpage = "{\"status\": \"err\", \"msg\": \"Error: ...\"}"; // TODO: produce as jansson D.S.
@@ -383,15 +406,32 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     //
     ctype = "application/json";
     // struct MHD_Response * create_proclisting_json2(const char * url) {
-    page = proc_list_json2(0); // Produce Process list content
+    json_t * array = proc_list_json2(0); // Produce Process list content (OLD: page = ...)
+    page = json_dumps(array, jflags);
+    memmode = MHD_RESPMEM_MUST_FREE;
+    json_decref(array);
+    if (!page || !*page) {
+      printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
+    }
+  }
+  else if (!strncmp(url, "/proctree", 6)) {
+    ctype = "application/json";
+    proc_t * root = proc_tree();
+    if (!root) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
+    json_t * obj = ptree_json(root, 0);
+    page = json_dumps(obj, jflags);
+    memmode = MHD_RESPMEM_MUST_FREE;
+    ptree_free(root, 0);
+    json_decref(obj);
+    CHECKPAGE:
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
   }
   // Check "page" once more 
   if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
-  response = MHD_create_response_from_buffer (
-    strlen (page), (void*) page, memmode); // MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY
+  // memmode should be in MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY, MHD_RESPMEM_MUST_FREE
+  response = MHD_create_response_from_buffer (strlen(page), (void*) page, memmode);
   MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
   //  return request; }
   
@@ -425,6 +465,16 @@ int main (int argc, char *argv[]) {
   char * docr = getcwd(docroot, sizeof(docroot));
   if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
   printf("Docroot: %s\n", docroot);
+  json_error_t error; 
+  json_t * json = json_load_file("./procster.conf.json", 0, &error);
+  if (!json) {
+    /* the error variable contains error information */
+    printf("JSON parsing error: %s\n", error.text);
+  }
+  else {
+     printf("Parsed JSON: %llu\n", (unsigned long long)json);
+  }
+  
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
