@@ -18,7 +18,7 @@ Procster is written on top of 4 main, reusable footings:
 - glib - For helper data structures
 - libjansson - JSON library to parse and serialize JSON
 
-Choosing a veru slim "embedded" web server (Instead of general purpose
+Choosing a very slim "embedded" web server (Instead of general purpose
 web server like Apache or NginX) and efficient libraries for other tasks
 keeps the memory footprint on the system "unnoticable".
 As such Procster should be easily runnable on SBC systems like RaspberryPi,
