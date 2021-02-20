@@ -1,0 +1,8 @@
+{
+  "alarmage": 86400,
+  "uid": 18896,
+  "http": {
+    "port": 8181,
+    "docroot": "."
+  }
+}
