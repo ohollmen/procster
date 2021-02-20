@@ -53,6 +53,8 @@
 #include <string.h>
 
 #include <jansson.h>
+#include "proclister.h"
+
 // #include <iostream>
 // kthreadd is pid 2, all kernel threads parent to it (ppid=2)
 #define IS_KTHREAD(proc)  (proc.ppid <= 2)
@@ -68,11 +70,11 @@ int arr2json(char ** arr, int cnt) {
   
   fputs("]\n", stdout);
 }
-/* Default flass as
+/* Default flags as
 NOT: PROC_FILLENV
 CONSIDER: PROC_UID (Creates empty list) PROC_FILLUSR
 */
-int flags_def = PROC_FILLMEM | PROC_FILLSTAT | PROC_FILLSTATUS | PROC_FILLCOM | PROC_FILLUSR; // PROC_UID
+// int flags_def = PROC_FILLMEM | PROC_FILLCOM | PROC_FILLUSR | PROC_FILLSTATUS | PROC_FILLSTAT; // PROC_UID
 
 /** Create a process list directly from readproc() listing as JSON.
 * For flags see FLAGS in man openproc.
@@ -98,7 +100,7 @@ char * proc_list_json(int flags) {
   strncat(jsonstr, "[\n", 2); jpos += 2;
   
   // PROC_FILLUSR
-  if (!flags) { flags = flags_def; } // Default flags
+  if (!flags) { flags = PROC_FLAGS_DEFAULT; } // Default flags (old: flags_def)
   PROCTAB * proclist = openproc(flags);
   if (!proclist) { fputs("openproc() Error\n", stderr); return NULL; }
   for (i=0 ; readproc(proclist, &proc) != NULL; i++) {
@@ -124,106 +126,80 @@ char * proc_list_json(int flags) {
   jpos -= 2; jsonstr[jpos] = '\0'; strncat(jsonstr, "\n]\n", 3); jpos += 3;
   return jsonstr;
 }
-/** Create approximate cmdline string out of char ** cmdline.
-* Approximate means no quoting or escaping is done to turn char ** items
-* back into *real* runnable properly formatted  commandline string.
-* Approximate is good enough for this process listing usage.
-* @param list Array of Strings
-* @param buf String buffer where Array items are serialized space-separated (must contain enough space for )
-* @return true for serialization being done, 0 for list being NUUL (no serialization *can* be done).
-*/
-int list2str(char ** list, char buf[]) {
-  int pos = 0;
-  int len = 0;
-  if (!list) {  return 0; } // printf("No list\n");
-  for (;*list;list++) {
-    len=strlen(*list);
-    // printf("Len: %d\n", len);
-    memcpy(&(buf[pos]), *list, len);
-    pos += len;
-    buf[pos] = ' ';
-    pos++;
-    
-  }
-  buf[pos] = '\0';
-  return 1;
-}
 
 /** Create Process list JSON.
 * Serialization is done using Jansson JSON library by building AoO and
-* serializing it.
+* serializing it. The linear list of processes can be built using single
+* stack based process entry buffer.
 * @param flags - Flags for openproc() (See man openproc)
-* @return JSON array of (process) objects as jansson library data structure.
+* @return JSON array of (process) objects as jansson library data structure
+* (has to be freed by caller)
 */
-char * proc_list_json2(int flags) {
+json_t * proc_list_json2(int flags) { // OLD: ret char *
   proc_t proc; // Proc Instance
   memset(&proc, 0, sizeof(proc));
   json_t *array = json_array();
-  if (!flags) { flags = flags_def; }
+  if (!flags) { flags = PROC_FLAGS_DEFAULT; } // flags_def
   PROCTAB * proclist = openproc(flags);
   if (!proclist) { fputs("openproc() Error\n", stderr); return NULL; }
   int i;
-  printf("Hertz=%Ld\n", Hertz);
   // Things to be refined
-  char starr[2] = {0, 0}; // Single letter process state
+  // OLDHERE: char starr[2] = {0, 0}; // Single letter process state
   char cmdline[2048] = {0}; //  stack smashing detected (re-terminate before populating each time)
   for (i=0 ; readproc(proclist, &proc) != NULL; i++) {
     if (IS_KTHREAD(proc)) { continue; }
-    //json_t * proc_to_json(proc_t * proc) {
-    json_t *obj = json_object();
-    json_object_set(obj, "pid", json_integer(proc.tid));
-    json_object_set(obj, "cmd",  json_string(proc.cmd)); // bn of executable
-    // char ** cmdline (/proc/$PID/cmdline is null-byte delimited version
-    cmdline[0] = '\0';
-    int ok = list2str(proc.cmdline, cmdline);
-    // printf("CMDLINE:%s\n", cmdline);
-    if (ok) { json_object_set(obj, "cmdline",  json_string(cmdline)); }
-    json_object_set(obj, "ppid", json_integer(proc.ppid));
-    json_object_set(obj, "rss",  json_integer(proc.rss));
-    // Times: start_time (should be seconds after 1970-1-1, but rolls on!)
-    json_object_set(obj, "starttime", json_integer(proc.start_time));
-    
-    json_object_set(obj, "utime", json_integer(proc.utime));
-    json_object_set(obj, "stime", json_integer(proc.stime));
-    // Also cutime, cstime for cumulated
-    //json_object_set(obj, "utime", json_integer(proc.cutime));
-    //json_object_set(obj, "stime", json_integer(proc.cstime));
-    // User info ruser[P_G_SZ] - Only populated w. flag PROC_FILLUSR
-    json_object_set(obj, "owner",  json_string(proc.ruser));
-    
-    // State: CPU/ processor, Process state (S=sleeping)
-    json_object_set(obj, "cpuid", json_integer(proc.processor));
-    //state, R=Running (or runnable), S=sleeping (Interruptable sleep), Z=Defunct/Zombie, D=Uninterruptable sleep (usually IO)
-    // T: Stopped (e.g. ctrl-Z), I=???(On kernel threads)
-    starr[0] = proc.state;
-    json_object_set(obj, "state",  json_string(starr));
-    //}
+    proc.lxcname = NULL;
+    json_t * obj = proc_to_json(&proc, cmdline);
     // See also: json_array_append_new(array, obj); // Steals value ...
-    json_array_append(array, obj);
+    // json_array_append(array, obj); // OLD
+    json_array_append_new(array, obj); // NEW
   }
   closeproc(proclist);
-  size_t jflags = JSON_COMPACT; // JSON_INDENT(2); // JSON_COMPACT; // JSON_ENSURE_ASCII
+  return array; // TODO: Serialize at the caller (To choose compact/pretty).
+  ///////////////////////////
+  //size_t jflags = JSON_COMPACT; // JSON_INDENT(2); // JSON_COMPACT; // JSON_ENSURE_ASCII
   // json_dumpfd()
-  char * json = json_dumps(array, jflags);
+  //char * jsonstr = json_dumps(array, jflags);
   // Need to free array and obj:s within it ?
-  return json;
+  //return jsonstr;
 }
 /** Tester utility for process JSON generation.
 */
 #ifdef TEST_MAIN
-int main () {
-  char * jsonstr = proc_list_json2(0);
-  if (!jsonstr) { printf("Failed to get processes !"); return 1; }
-  // We now have i process items
-  //int cnt = i;
-  //arr2json(char ** arr, int cnt);
-  fputs(jsonstr, stdout);
-  free(jsonstr);
+int main (int argc, char ** argv) {
+  if (argc < 2) {
+    printf("Need subcommand list or tree (cnt=%d)\n", argc); return 1;
+  }
+  char * cmd = argv[1];
+  // printf("Got subcommand %s\n", cmd);
+  size_t jflags = JSON_INDENT(2);
+  char * jsonstr = NULL;
+  if (!strcmp(cmd, "list")) {
+    // OLD: char * jsonstr =
+    json_t * array = proc_list_json2(0);
+    jsonstr = json_dumps(array, jflags);
+    if (!jsonstr) { printf("Failed to serialize processes (JSON list)!"); return 1; }
+    // We now have i process items
+    //int cnt = i;
+    //arr2json(char ** arr, int cnt);
+    fputs(jsonstr, stdout);
+    // free(jsonstr);
+    //json_decref(array);
+  }
+  else if (!strcmp(cmd, "tree")) {
+    proc_t * root = proc_tree();
+    //ptree_dump(root, 0); return 0;
+    json_t * obj = ptree_json(root, 0);
+    jsonstr = json_dumps(obj, jflags);
+    if (!jsonstr) { printf("Failed to serialize processes (JSON tree)!"); return 1; }
+    fputs(jsonstr, stdout);
+    ptree_free(root, 0);
+    //json_decref(obj);
+  }
+  if (jsonstr) { free(jsonstr); }
+  printf("Survived Free/Deref\n");
   //cout << "size of proc " << sizeof(proc) << "\n";
   //cout << "size of proc_info " << sizeof(proc_info) << "\n";
-
-  
-
   return 0;  
 }
 #endif
