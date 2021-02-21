@@ -34,8 +34,8 @@
  
  
 #include <stdio.h>
-#include <proc/readproc.h>
-#include <proc/sysinfo.h>
+//#include <proc/readproc.h>
+//#include <proc/sysinfo.h>
 //#include <gmodule.h>
 #include <glib.h>
 #include <time.h> // /usr/include/time.h

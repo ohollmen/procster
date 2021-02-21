@@ -10,8 +10,8 @@
 
 #include <errno.h> // errno
 #include <string.h> // strerror()
-#include <proc/readproc.h>
-#include <proc/sysinfo.h> // Hertz, getbtime
+//#include <proc/readproc.h>
+//#include <proc/sysinfo.h> // Hertz, getbtime
 
 
 #include <jansson.h>

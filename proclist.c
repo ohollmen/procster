@@ -48,8 +48,8 @@
 */
 #include <stdio.h>
 #include <stdlib.h>
-#include <proc/readproc.h> // /usr/include/proc/readproc.h
-#include <proc/sysinfo.h> // Hertz
+//#include <proc/readproc.h> // /usr/include/proc/readproc.h
+//#include <proc/sysinfo.h> // Hertz
 #include <string.h>
 
 #include <jansson.h>

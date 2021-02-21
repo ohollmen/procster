@@ -1,11 +1,14 @@
 #include <glib.h>
+#define WITH_SYSTEMD
 #include <proc/readproc.h>
+#include <proc/sysinfo.h> // Hertz, getbtime
 
 // Need PROC_FILLSTATUS for ppid, need PROC_FILLSTAT for times.
 #define PROC_FLAGS_DEFAULT PROC_FILLMEM | PROC_FILLCOM | PROC_FILLUSR | PROC_FILLSTATUS | PROC_FILLSTAT
 // process start time as EPOC timestamp
 #define proc_stime_ux(p) (getbtime() + p->start_time / Hertz)
-// Centos 7.6 does not have member lxcname
+// Centos 7.6 does not have member lxcname:
+// procutil.c:27:20: error: ‘proc_t’ has no member named ‘lxcname’
 //#define proc_chn_init(p) (p)->lxcname = NULL
 #define proc_chn_init(p) ((p)->sd_uunit = NULL)
 
