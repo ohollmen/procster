@@ -70,16 +70,6 @@ void val_free(void * v) {
   //NOT: freeproc((proc_t*)v);
 }
 
-/** Add a child process to a parent.
- * Child is added to an "abused" (not meant for this purpose) struct member
- * (however still a pointer member "lxcname") of the process structure.
- * Facilitates appropriate casts to allow smooth operation and easy use.
- * @param par - Parent
- * @param ch - Child
- */
-void par_add_child(proc_t * par, proc_t * ch) {
-  par->lxcname = (char*) g_slist_append((GSList*)par->lxcname, ch);
-}
 
 
 /** Populate a tree of (proc_t) processes.
@@ -114,7 +104,7 @@ proc_t * proc_tree(void) {
   int flags = PROC_FLAGS_DEFAULT;
   PROCTAB*  proctab = openproc(flags); // , uidarr, 1); // TODO: readproctab(0); ?
   while (procp = readproc(proctab, NULL)) { // ALT: &proc
-    procp->lxcname = NULL; // Reserve use (for children)
+    proc_chn_init(procp); // Reserve use (for children)
     // debug && printf("%d (ppid: %d) ", procp->tid, procp->ppid);
     g_hash_table_insert(ht, GINT_TO_POINTER(procp->tid), procp);
     // No parent - Parent to (as a child of) p0 / kernel
@@ -126,14 +116,13 @@ proc_t * proc_tree(void) {
     proc_t * par = g_hash_table_lookup (ht, GINT_TO_POINTER(procp->ppid));
     // Approx 80% have parent already hashed an avail - Add to par (GSList)
     if (par) {
-      //par->lxcname = (char*) g_slist_append((GSList*)par->lxcname, procp);
       par_add_child(par, procp); // printf("Have parent hashed");
     }
     // Parent N/A. Add procp (or tid) to reiterate child(ren) later
     else { list = g_slist_prepend(list, procp); } // NOT: _append (See IBM article)
     //DONEPROC:
     //debug = 0;
-    // debug && printf(" %s ", procp->lxcname); // Check
+    // debug && printf(" %s ", procp->lxcname); // Check usage
     // debug && puts("\n");
   }
   closeproc(proctab);

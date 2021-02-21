@@ -19,17 +19,31 @@
 #include "proclister.h"
 char * leadstr[] = {"", "GRPLEAD", "SESSLEAD", NULL};
 
+/** Add a child process to a parent.
+ * Child is added to an "abused" (not meant for this purpose) struct member
+ * (however still a pointer member "lxcname") of the process structure.
+ * Facilitates appropriate casts to allow smooth operation and easy use.
+ * @param par - Parent
+ * @param ch - Child
+ */
+void par_add_child(proc_t * par, proc_t * ch) {
+  //par->lxcname = (char*) g_slist_append((GSList*)par->lxcname, ch);
+  par->sd_uunit = (char*) g_slist_append((GSList*)par->sd_uunit, ch);
+}
+
 /** Get a list of *direct* child processes of parent process.
 * @param p - Parent process whose *direct* children are being accessed
 * @return - List of children
 */
 GSList * par_get_ch(proc_t * p) {
-  return (GSList*)p->lxcname;
+  //return (GSList*)p->lxcname;
+  return (GSList*)p->sd_uunit;
 }
 
 /** Kill process by sending SIGKILL signal to it.
  * See also man 7 signal and man 2 kill.
  * @param pid - PID of individual process (>= 1)
+ * @return 1 for process being killed 0 for errors
  */
 int proc_kill(int pid) {
   // int pid = 14197; // 1000000;
@@ -84,6 +98,7 @@ int gsleader(proc_t * p) {
 * Approximate means no quoting or escaping is done to turn char ** items
 * back into *real* runnable properly formatted  commandline string.
 * Approximate is good enough for this process listing usage.
+* 
 * @param list Array of Strings
 * @param buf String buffer where Array items are serialized space-separated (must contain enough space for )
 * @return true for serialization being done, 0 for list being NUUL (no serialization *can* be done).
@@ -108,8 +123,9 @@ int list2str(char ** list, char buf[]) {
 }
 
 /** Populate Process node into (Jansson) JSON Object.
-* @todo See https://groups.google.com/g/jansson-users/c/xD8QLQF3ex8 and the need to use json_object_set_new()
-*/
+ * Can be used to populate processes in linear list or tree formats.
+ * @todo See https://groups.google.com/g/jansson-users/c/xD8QLQF3ex8 and the need to use json_object_set_new()
+ */
 json_t * proc_to_json(proc_t * proc, char * cmdline) {
   if (!proc) { return NULL; }
   json_t *obj = json_object();
@@ -155,6 +171,7 @@ json_t * proc_to_json(proc_t * proc, char * cmdline) {
 /** Dump process tree to STDOUT.
  * @param p - Root process of the tree
  * @param lvl - Level in the process tree (Intial caller should pass 0)
+ * @return None
  */
 void ptree_dump(proc_t * p, int lvl) {
   GSList * chn = NULL;
@@ -176,7 +193,9 @@ void ptree_dump(proc_t * p, int lvl) {
   
 }
 /** Convert process tree to JSON.
- * 
+ * @param p - Root process node of the tree (linux kernel, pid=0)
+ * @param lvl - Recursion level (explicit caller should pass 0)
+ * @return Jansson JSON root node
  */
 json_t * ptree_json(proc_t * p, int lvl) { // , json_t * obj
   char cmdline[2048] = {0};
@@ -198,8 +217,11 @@ json_t * ptree_json(proc_t * p, int lvl) { // , json_t * obj
   return obj;
 }
 /** Free/Release the tree of processes.
-* Release custom used lxcname member (GSList *) and mark it unallocated (NULL).
+* Release custom used (OLD:lxcname) "sd_uunit" member (GSList *) and mark it unallocated (NULL).
 * to not accidentally free it wrongly (or leak memory)
+* @param p - Root process
+* @param lvl - Recursion level (explicit caller should pass 0)
+* @return None
 */
 void ptree_free(proc_t * p, int lvl) {
   // GSList * iter = NULL;
@@ -210,7 +232,8 @@ void ptree_free(proc_t * p, int lvl) {
     //NOT: freeproc((proc_t*)iter->data);
     ptree_free((proc_t*)iter->data, lvl+1);
   }
-  g_slist_free(chn); // (GSList *)p->lxcname. g_slist_free_full(chn, (GDestroyNotify)freecb);
-  p->lxcname = NULL;
+  g_slist_free(chn); // g_slist_free_full(chn, (GDestroyNotify)freecb);
+  // p->lxcname = NULL;
+  proc_chn_init(p); // Sets to NULL
   freeproc(p);
 }

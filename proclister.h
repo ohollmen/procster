@@ -5,6 +5,10 @@
 #define PROC_FLAGS_DEFAULT PROC_FILLMEM | PROC_FILLCOM | PROC_FILLUSR | PROC_FILLSTATUS | PROC_FILLSTAT
 // process start time as EPOC timestamp
 #define proc_stime_ux(p) (getbtime() + p->start_time / Hertz)
+// Centos 7.6 does not have member lxcname
+//#define proc_chn_init(p) (p)->lxcname = NULL
+#define proc_chn_init(p) ((p)->sd_uunit = NULL)
+
 proc_t * proc_tree(void);
 void ptree_dump(proc_t * p, int lvl);
 // Process tree parnt-child relations helpers
@@ -28,34 +32,56 @@ typedef struct pstree {
 typedef struct miniserver miniserver;
 typedef struct request    request;
 typedef struct response   response;
-
+typedef struct action     action;
 typedef int (*webhandler)( request * req,  response * res);
 
+miniserver * server_new(json_t * json);
+void server_actions_load(miniserver * s, action * actarr, int cnt);
+void server_run(miniserver * s);
+action * action_find(miniserver * s, const char * url);
+
 struct action {
-  char * url;
-  //webhandler hdlr;
+  char * actlbl; ///< Short id label (no spaces)
+  char * name; ///< Descriptive name
+  char * url; ///< URL that this action gets dispatched on
+  char * conttype; ///< Content type this action plans to produce under normal conditions.
+  webhandler hdlr; ///< Request handler callback (function pointer)
+  int auth; ///< Require (Basic) authentication. TODO: Enum to the kind of auth.
 };
 struct miniserver {
   char * docroot;
   int port;
-  GSList * handlers;
+  int jsonindent;
+  GSList * actions;
+  void * server; // Lower level server object
+  int debug;
+  int reqdebug;
+  char * logfname;
+  FILE * logfh;
 };
 struct request {
-  struct action * act;
+  char * url;
+  
   char * method;
   int methodnum;
   // For future POST
   char * cont;
   int contlen;
-  
+  char * conttype;
+  struct action * act; ///< Action that dispatched handler
+  miniserver * ms; ///< Server under which we are running
+  response * res; ///< Associated Response
 };
 struct response {
   struct action * act;
-  // Either json OR cont
-  json_t json;
+  // Content: Either cont,contlen OR json
+  json_t * json;
   char * cont;
   int contlen;
-  // Response 
+  char * conttype;
+  int memmode; // 
+  // Response Status code (e.g. 200, 404 ...)
   int code;
 };
-
+// Req, Res combo (helper for containing bot req, res)
+// OR just link req to res by req->res;

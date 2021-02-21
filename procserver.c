@@ -342,7 +342,7 @@ if (!*con_cls) {
 #include <sys/stat.h> // struct stat
 /** Try to resolve url to a static file and return response for it.
 * @param url - Request URL to test for static content
-* @return MHD_Response (pointer) for static file or 
+* @return MHD_Response (pointer) for static file or NULL
 * @todo: Check suffix and try to map to appropriate mime-type
 */
 struct MHD_Response * trystatic(const char * url) {
@@ -358,7 +358,7 @@ struct MHD_Response * trystatic(const char * url) {
   int sok = fstat(fd, &statbuf);
   if (sok < 0) { return 0; }
   uint64_t size = statbuf.st_size; // off_t
-  printf("Ready to create response from fd: %d (%ld)\n", fd, size);
+  printf("Ready to create response from fd: %d (%ld B)\n", fd, size);
   struct MHD_Response * response = MHD_create_response_from_fd(size, fd);
   // Extract suffix
   char * suff = strrchr(url, '.');
@@ -440,7 +440,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
   
   if (response) { MHD_destroy_response(response); }
-  return ret;			  
+  return ret;
 }
 /** Post request Callback launched by MHD after completing request.
 * 
@@ -465,7 +465,7 @@ int main (int argc, char *argv[]) {
   char * docr = getcwd(docroot, sizeof(docroot));
   if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
   printf("Docroot: %s\n", docroot);
-  json_error_t error; 
+  json_error_t error;
   json_t * json = json_load_file("./procster.conf.json", 0, &error);
   if (!json) {
     /* the error variable contains error information */
@@ -481,8 +481,8 @@ int main (int argc, char *argv[]) {
     // NOTE: Connection handler: answer_to_connection*
     &answer_to_connection0, NULL,
     MHD_OPTION_NOTIFY_COMPLETED,
-    NULL, // req_term_cb, MHD Manual p. 18 ()
-    NULL,
+    NULL, NULL, // req_term_cb, userdata MHD Manual p. 18 ()
+    
     MHD_OPTION_END); 
   if (NULL == mhd) { printf("Could not start MHD (check if port %d is taken)\n", port);return 3; }
   printf("Starting Micro HTTP daemon at port %d (Try: http://localhost:%d/)\n", port, port);

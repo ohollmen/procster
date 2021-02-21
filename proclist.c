@@ -148,7 +148,8 @@ json_t * proc_list_json2(int flags) { // OLD: ret char *
   char cmdline[2048] = {0}; //  stack smashing detected (re-terminate before populating each time)
   for (i=0 ; readproc(proclist, &proc) != NULL; i++) {
     if (IS_KTHREAD(proc)) { continue; }
-    proc.lxcname = NULL;
+    // proc.lxcname = NULL; // OLD
+    proc_chn_init(&proc);
     json_t * obj = proc_to_json(&proc, cmdline);
     // See also: json_array_append_new(array, obj); // Steals value ...
     // json_array_append(array, obj); // OLD

@@ -41,12 +41,21 @@ cd procster
 ```
 Install dependencies (Example on Ubuntu 18.04)
 ```
-# For Processlister ...
+# For Processlister ... (procps 3.3)
 sudo apt-get install libprocps6 libpropcs-dev libjansson4 libjansson-dev
 sudo apt-get install libglib2.0-dev
 # For Microhttpd
 sudo apt-get install libmicrohttpd12 libmicrohttpd-dev
 ```
+... And Centos/RH (7.6)
+```
+# procps 3.3, jansson 2.10
+sudo yum install -y procps-ng procps-ng-devel jansson jansson-devel
+# TODO: glib2-static
+sudo yum install -y glib2 glib2-devel
+sudo yum install -y libmicrohttpd libmicrohttpd-devel
+```
+
 Compile libraries and process server:
 
 ```
