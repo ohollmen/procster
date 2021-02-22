@@ -96,7 +96,10 @@ sudo make install
 ```
 This places include files and libraries under /usr/local/include/proc/ and /usr/local/lib respectively.
 Because of the way includes are referred (from `/proc`) subdir, the respective -I and -L options would be
--I/usr/local/include/ -L/usr/local/lib (To testrun on Centos, you may need to add export LD_LIBRARY_PATH=/usr/local/lib).
+-I/usr/local/include/ -L/usr/local/lib (To testrun on Centos, you may need to add export LD_LIBRARY_PATH=/usr/local/lib or
+preferably add /usr/local/lib to /etc/ld.so.conf and run ldconfig). You should also uninstall procps-ng-devel from
+causing ambiguity with newly installed headers from (gitlab) source package (causing wrong structure offsets,
+wrong function signatures, etc.).
 
 ## Debugging (for Centos, sigh ...)
 
@@ -118,4 +121,13 @@ Example: Check what all members (and member values) the proc_t has in it for par
 ...
 (gdb) b proclist.c:152
 (gdb) run
+```
+Example of hitting error:
+```
+...
+139	  int ok = list2str(proc->cmdline, cmdline);
+(gdb) n
+
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff7408d0b in __memcpy_ssse3_back () from /lib64/libc.so.6
 ```
