@@ -113,10 +113,11 @@ int list2str(char ** list, char buf[], int size) {
   for (;*list;list++) {
     len = strlen(*list);
     // printf("Len: %d\n", len);
+    if ((pos+len+1) > size) { buf[pos] = '\0'; return 1; } // MIN(size-1, pos)
     memcpy(&(buf[pos]), *list, len);
     pos += len;
     // TODO: Possibly move earlier
-    if (pos > size) { buf[MIN(size-1, pos)] = '\0'; return 1; }
+    
     buf[pos] = ' ';
     pos++;
     
