@@ -169,10 +169,12 @@ json_t * proc_list_json2(int flags) { // OLD: ret char *
 #ifdef TEST_MAIN
 int main (int argc, char ** argv) {
   if (argc < 2) {
-    printf("Need subcommand list or tree (cnt=%d)\n", argc); return 1;
+    fprintf(stderr, "Need subcommand list or tree (cnt=%d)\n(use PROCLIST_DEBUG=1 for verbose output)\n", argc); return 1;
   }
   char * cmd = argv[1];
   // printf("Got subcommand %s\n", cmd);
+  char * debugstr = getenv("PROCLIST_DEBUG");
+  int debug = debugstr ? atoi(debugstr) : 0;
   size_t jflags = JSON_INDENT(2);
   char * jsonstr = NULL;
   if (!strcmp(cmd, "list")) {
@@ -188,17 +190,22 @@ int main (int argc, char ** argv) {
     //json_decref(array);
   }
   else if (!strcmp(cmd, "tree")) {
+    debug && printf("Collect raw tree of processes\n");
     proc_t * root = proc_tree();
+    if (!root) { printf("Failed to collect (raw) tree of processes\n"); }
     //ptree_dump(root, 0); return 0;
+    debug && printf("Populate tree of JSON process nodes\n");
     json_t * obj = ptree_json(root, 0);
+    debug && printf("Serialize JSON (jansson)n");
     jsonstr = json_dumps(obj, jflags);
     if (!jsonstr) { printf("Failed to serialize processes (JSON tree)!"); return 1; }
     fputs(jsonstr, stdout);
+    debug && printf("Free raw tree of process nodes\n");
     ptree_free(root, 0);
     //json_decref(obj);
   }
   if (jsonstr) { free(jsonstr); }
-  printf("Survived Free/Deref\n");
+  if (debug) { fprintf(stderr, "Survived Free/Deref\n"); }
   //cout << "size of proc " << sizeof(proc) << "\n";
   //cout << "size of proc_info " << sizeof(proc_info) << "\n";
   return 0;  
