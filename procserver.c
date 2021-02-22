@@ -397,12 +397,12 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   char * ctype = "text/plain";
   char * page = NULL;
   size_t jflags = JSON_INDENT(2);
-  response = trystatic(url);
-  if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
+  
   char * errpage = "{\"status\": \"err\", \"msg\": \"Error: ...\"}"; // TODO: produce as jansson D.S.
-  printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
+  // printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
+  printf("URL(%s): %s\n", method, url);
   // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
-  if (!strncmp(url, "/procs", 6)) {
+  if (!strncmp(url, "/procs", 6) || !strncmp(url, "/proclist", 9)) {
     //
     ctype = "application/json";
     // struct MHD_Response * create_proclisting_json2(const char * url) {
@@ -427,6 +427,11 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
+  }
+  else {
+    response = trystatic(url);
+    if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
+    ctype = "text/plain"; printf("No action match for URL: %s\n", url);
   }
   // Check "page" once more 
   if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
