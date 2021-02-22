@@ -104,16 +104,19 @@ int gsleader(proc_t * p) {
 * @return true for serialization being done, 0 for list being NUUL (no serialization *can* be done).
 * @todo Pass buffer size
 */
-int list2str(char ** list, char buf[]) {
+int list2str(char ** list, char buf[], int size) {
   int pos = 0;
   int len = 0;
   if (!list) { return 0; } // printf("No list\n");
+// /usr/include/glib-2.0/glib/gmacros.h:300:0
+//#define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
   for (;*list;list++) {
     len = strlen(*list);
     // printf("Len: %d\n", len);
     memcpy(&(buf[pos]), *list, len);
     pos += len;
-    //if (pos > (len-1)) { buf[]; } // min(len-1, pos)
+    // TODO: Possibly move earlier
+    if (pos > size) { buf[MIN(size-1, pos)] = '\0'; return 1; }
     buf[pos] = ' ';
     pos++;
     
@@ -124,6 +127,8 @@ int list2str(char ** list, char buf[]) {
 
 /** Populate Process node into (Jansson) JSON Object.
  * Can be used to populate processes in linear list or tree formats.
+ * @param proc - Process
+ * @param cmdline - Buffer to serialize (apprximate) command line with arguments into.
  * @todo See https://groups.google.com/g/jansson-users/c/xD8QLQF3ex8 and the need to use json_object_set_new()
  */
 json_t * proc_to_json(proc_t * proc, char * cmdline) {
@@ -136,7 +141,7 @@ json_t * proc_to_json(proc_t * proc, char * cmdline) {
   json_object_set_new_nocheck(obj, "cmd",  json_string(proc->cmd)); // bn of executable
   // char ** cmdline (/proc/$PID/cmdline is null-byte delimited version
   cmdline[0] = '\0';
-  int ok = list2str(proc->cmdline, cmdline);
+  int ok = list2str(proc->cmdline, cmdline, 2048);
   // printf("CMDLINE:%s\n", cmdline);
   if (proc->cmdline && ok) { json_object_set_new_nocheck(obj, "cmdline",  json_string(cmdline)); }
   json_object_set_new_nocheck(obj, "ppid", json_integer(proc->ppid));
