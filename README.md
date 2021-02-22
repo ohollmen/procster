@@ -131,3 +131,25 @@ Example of hitting error:
 Program received signal SIGSEGV, Segmentation fault.
 0x00007ffff7408d0b in __memcpy_ssse3_back () from /lib64/libc.so.6
 ```
+Or the "lazy way" (run from very top level, ask a backtrace after crash):
+```
+(gdb) run list
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+Starting program: /projects/ccxsw/home/ccxswbuild/procster/./procs list
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib64/libthread_db.so.1".
+
+Program received signal SIGSEGV, Segmentation fault.
+0x00007ffff7408d0b in __memcpy_ssse3_back () from /lib64/libc.so.6
+(gdb) backtrace
+#0  0x00007ffff7408d0b in __memcpy_ssse3_back () from /lib64/libc.so.6
+#1  0x0000000000401b93 in list2str (list=0x6142d8, 
+    buf=buf@entry=0x7fffffffe090 "/export/electriccloud/electriccommander/jre/bin/java -server -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -Dec.logRoot=\"logs/agent/jagent.log\" -Dcommand"...)
+    at procutil.c:114
+#2  0x0000000000401c49 in proc_to_json (proc=proc@entry=0x7fffffffdc80, 
+    cmdline=cmdline@entry=0x7fffffffe090 "/export/electriccloud/electriccommander/jre/bin/java -server -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError -XX:+AggressiveOpts -XX:+UseFastAccessorMethods -Dec.logRoot=\"logs/agent/jagent.log\" -Dcommand"...)
+    at procutil.c:139
+#3  0x00000000004017ee in proc_list_json2 (flags=107, flags@entry=0) at proclist.c:153
+#4  0x0000000000401326 in main (argc=<optimized out>, argv=<optimized out>) at proclist.c:182
+```
