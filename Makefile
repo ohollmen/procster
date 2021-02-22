@@ -1,5 +1,6 @@
 # Allow declarations in the first part of (3-part) for-loop.
 # For kill() and strdup() we must use _POSIX_C_SOURCE
+# Use -g here for debugging
 CC=gcc -O2 -std=c99 -D_POSIX_C_SOURCE=200809
 LIBS=-lmicrohttpd -lprocps -ljansson
 # For Ulfius apps /usr/include/ulfius.h
@@ -14,17 +15,20 @@ all: libs main
 libs:
 	# Actually test-exe
 	# `pkg-config --cflags --libs glib-2.0`
-	$(CC) -DTEST_MAIN -o proclist proclist.c proctree.c procutil.c -lprocps -ljansson $(GLIB_CFLAGS) $(GLIB_LIBS)
+	#$(CC) -DTEST_MAIN -o proclist proclist.c proctree.c procutil.c -lprocps -ljansson $(GLIB_CFLAGS) $(GLIB_LIBS)
 	
 	#  -lprocps
 	$(CC) -c proclist.c -o proclist.o `pkg-config --cflags glib-2.0`
 	$(CC) -c proctree.c -o proctree.o `pkg-config --cflags glib-2.0`
 	$(CC) -c procutil.c -o procutil.o `pkg-config --cflags glib-2.0`
+	$(CC) -DTEST_MAIN -c proclist.c -o proclist_main.o `pkg-config --cflags glib-2.0`
 	echo "Run test main: ./proclist"
 	echo "Compile Process server: make main"
-	ls -al proclist.o proctree.o
+	ls -al proclist.o proctree.o procutil.o proclist_main.o
 	# undefined reference to `main' w. TEST_MAIN_XX
 	#$(CC) -DTEST_MAIN -o proctree proctree.c procutil.o -lprocps -ljansson `pkg-config --cflags --libs glib-2.0`
+	# Most sophisticated way to compile CLI based on earlier objects
+	$(CC) -o procs proclist_main.o proctree.o procutil.o -lprocps -ljansson $(GLIB_CFLAGS) $(GLIB_LIBS)
 main:
 	$(CC) -c procserver.c `pkg-config --cflags glib-2.0`
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
