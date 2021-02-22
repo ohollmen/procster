@@ -41,11 +41,11 @@ cd procster
 ```
 Install dependencies (Example on Ubuntu 18.04)
 ```
-# For Processlister ... (procps 3.3)
-sudo apt-get install libprocps6 libpropcs-dev libjansson4 libjansson-dev
-sudo apt-get install libglib2.0-dev
+# For Processlister ... (procps 3.3, jansson 2.11)
+sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
+sudo apt-get install -y libglib2.0-dev
 # For Microhttpd
-sudo apt-get install libmicrohttpd12 libmicrohttpd-dev
+sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
 ```
 ... And Centos/RH (7.6)
 ```
@@ -78,4 +78,44 @@ Test HTTP Output:
 curl http://localhost:8181/procs
 # Prettified JSON, Inspect with pager
 curl http://localhost:8181/procs | python -m json.tool | less
+```
+
+## Compiling procps-ng afresh for Centos
+
+```
+# gettext gettext-libs gettext-devel gettext-common-devel
+yum -y install gettext gettext-libs gettext-devel
+cd /tmp
+git clone https://gitlab.com/procps-ng/procps
+cd procps
+# Need GNU gettext/autopoint, libtool-2, libtoolize
+./autogen.sh
+./configure --without-ncurses
+make
+sudo make install
+```
+This places include files and libraries under /usr/local/include/proc/ and /usr/local/lib respectively.
+Because of the way includes are referred (from `/proc`) subdir, the respective -I and -L options would be
+-I/usr/local/include/ -L/usr/local/lib (To testrun on Centos, you may need to add export LD_LIBRARY_PATH=/usr/local/lib).
+
+## Debugging (for Centos, sigh ...)
+
+Compile (proclist CLI utility) with debug info (-g / -ggdb). Add this option into the Makfile line "CC=gcc ...".
+Start debug by launching:
+```
+gdb ./proclist
+GNU gdb (Ubuntu 8.1-0ubuntu3.2) 8.1.0.20180409-git
+...
+Reading symbols from ./proclist...done.
+(gdb) b 176
+Breakpoint 1 at 0x555555555343: file proclist.c, line 176.
+(gdb) run tree
+Starting program: /home/mrsmith/projects/procster/proclist
+```
+Example: Check what all members (and member values) the proc_t has in it for particular procps(-ng) OS distro version:
+(line number examplary/approximate, try to hit the beginning of proclist.c:proc_list_json2 for loop):
+```
+...
+(gdb) b proclist.c:152
+(gdb) run
 ```
