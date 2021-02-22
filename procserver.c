@@ -438,6 +438,13 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   // memmode should be in MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY, MHD_RESPMEM_MUST_FREE
   response = MHD_create_response_from_buffer (strlen(page), (void*) page, memmode);
   MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
+  // Allow cross-domain ref (example from docker headers setup w. daemon cl opts --api-cors-header *)
+  
+  MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
+  MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
+  MHD_add_response_header (response, "ccess-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
+  
+  // MHD_add_response_header (response, "Content-Type", "");
   //  return request; }
   
   QUEUE_REQUEST:

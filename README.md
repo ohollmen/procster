@@ -101,7 +101,7 @@ preferably add /usr/local/lib to /etc/ld.so.conf and run ldconfig). You should a
 causing ambiguity with newly installed headers from (gitlab) source package (causing wrong structure offsets,
 wrong function signatures, etc.).
 
-## Debugging (for Centos, sigh ...)
+## Debugging The Procster
 
 Compile (proclist CLI utility) with debug info (-g / -ggdb). Add this option into the Makfile line "CC=gcc ...".
 Start debug by launching:

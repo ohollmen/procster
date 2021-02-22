@@ -77,6 +77,7 @@ struct request {
 };
 struct response {
   struct action * act;
+  void * conn; ///< Lower level http conn/response, similar to miniserver->server;
   // Content: Either cont,contlen OR json
   json_t * json;
   char * cont;
