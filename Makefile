@@ -35,7 +35,7 @@ main:
 	$(CC) -o procserver procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
 	echo "Run by: ./procserver PORT (e.g. 8181)"
 clean:
-	rm -f procserver proclist.o proclist proctree.o procutil.o ulftest *.o
+	rm -f procserver proclist.o proclist procs proctree.o procutil.o ulftest *.o
 test:
 	# -d "data"
 	curl -X POST -H "Content-Type: application/json" --data-binary @test.json --output - http://localhost:8001/json
