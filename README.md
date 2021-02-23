@@ -39,15 +39,15 @@ Clone source from Github:
 git clone https://github.com/ohollmen/procster.git
 cd procster
 ```
-Install dependencies (Example on Ubuntu 18.04)
+Install dependencies (e.g) on Ubuntu 18.04:
 ```
-# For Processlister ... (procps 3.3, jansson 2.11)
+# For Processlister ... (procps 3.3.12, jansson 2.11)
 sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
 sudo apt-get install -y libglib2.0-dev
 # For Microhttpd
 sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
 ```
-... And Centos/RH (7.6)
+... or Centos/RH (7.6):
 ```
 # procps 3.3, jansson 2.10
 sudo yum install -y procps-ng procps-ng-devel jansson jansson-devel
@@ -55,6 +55,8 @@ sudo yum install -y procps-ng procps-ng-devel jansson jansson-devel
 sudo yum install -y glib2 glib2-devel
 sudo yum install -y libmicrohttpd libmicrohttpd-devel
 ```
+On any of the older distros and Linux versions with older procps (e.g. Ubuntu 14.04 has libprocps3 - 3.3.9), compile libprops
+out of source code (see separate section for short instructions on this).
 
 Compile libraries and process server:
 

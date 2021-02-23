@@ -19,7 +19,7 @@
 * 
 * Naming comes from
 * - readproc.h (struct proc_t)
-* - 
+* - NPM process-list
 * # Alternatives to printf-JSON
 *
 * General: https://stackoverflow.com/questions/6673936/parsing-json-using-c

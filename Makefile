@@ -9,7 +9,8 @@ CFLAGS+=-c -Wall -I$(ULFIUS_INCLUDE)  -D_REENTRANT $(ADDITIONALFLAGS) $(CPPFLAGS
 # Ubuntu with pkg-config
 GLIB_CFLAGS=`pkg-config --cflags --libs glib-2.0`
 GLIB_LIBS=`pkg-config --libs glib-2.0`
-
+MUSTACHE=./node_modules/mustache/bin/mustache
+EXESUFF=
 all: libs main
 
 libs:
@@ -32,8 +33,8 @@ libs:
 main:
 	$(CC) -c procserver.c `pkg-config --cflags glib-2.0`
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
-	$(CC) -o procserver procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
-	echo "Run by: ./procserver PORT (e.g. 8181)"
+	$(CC) -o procserver$(EXESUFF) procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
+	echo "Run by: ./procserver$(EXESUFF) PORT (e.g. 8181)"
 clean:
 	rm -f procserver proclist.o proclist procs proctree.o procutil.o ulftest *.o
 test:
@@ -53,3 +54,8 @@ server:
 	$(CC) -c ms_test.c `pkg-config --cflags glib-2.0`
 	$(CC) -o ms_test miniserver.o ms_test.o `pkg-config --libs glib-2.0` -ljansson -lmicrohttpd
 	echo "Run server test by: ./ms_test"
+unit:
+	mkdir -p $(HOME)/.procster/
+	# echo "No Config" && exit 1
+	if [ ! -f "$(HOME)/.procster/procster.conf.json" ]; then cp ./procster.conf.json "$(HOME)/.procster/procster.conf.json" ; fi
+	cat ~/.procster/procster.conf.json | $(MUSTACHE) -  conf/procster.service.mustache
