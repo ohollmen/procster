@@ -352,7 +352,7 @@ struct MHD_Response * trystatic(const char * url) {
   sprintf(urlfile, "%s/%s", docroot, (char*)url);
   printf("Try static file: %s\n", urlfile);
   int acc = access( urlfile, F_OK );
-  if (acc == -1) { return 0; }
+  if (acc == -1) { printf("No access to %s\n", urlfile); return 0; }
   int fd = open(urlfile, O_RDONLY);
   if (fd < 0) { return 0; }
   struct stat statbuf = {0};
@@ -483,6 +483,7 @@ int savepid(json_t * json) {
     fprintf(logfh, "%d\n", pid);
     if (logfh) { fclose(logfh); }
   }
+  return 0;
 }
 /** Main for (Micro HTTP Daemon) process app.
 * 5th param to MHD_start_daemon() defines the main connection handler
@@ -505,7 +506,8 @@ int main (int argc, char *argv[]) {
   else {
      printf("Parsed JSON: %llu\n", (unsigned long long)json);
   }
-  savepid(json);
+  int piderr = savepid(json);
+  if (piderr) { printf("Error %d saving PID\n"); }
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
