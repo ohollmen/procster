@@ -14,8 +14,8 @@ Group={{ group }}
 ExecStart={{{ docroot }}}/procserver {{{ port }}}
 WorkingDirectory={{{ docroot }}}
 # Logging
-#StandardOutput=file:...
-#StandardError=file:...
+StandardOutput=file:/var/log/procster.out.log
+StandardError=file:/var/log/procster.err.log
 Restart=on-failure
 # PIDFile={{{ docroot }}}/procster.pid
 GuessMainPID=true
