@@ -41,6 +41,7 @@
 *     - Better yet: json_object_set_new_nocheck() - No key UTF-8 check
 *   - json_array_append_new() (OLD: json_array_append()) on array add
 *   - json_decref(obj)
+* - Does Practically not leak memory.
 */
 
 #include <sys/types.h>
@@ -53,7 +54,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#include <unistd.h> // getcwd(), access()
+#include <unistd.h> // getcwd(), access(), getpid()
 #include <jansson.h> // For config
 
 #include "proclister.h"
@@ -428,6 +429,8 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
   }
+  // Match
+  //else if ("/kill/:pid") {}
   else {
     response = trystatic(url);
     if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
@@ -465,6 +468,22 @@ void req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, 
   // NOT: return NULL;
   return;
 }
+
+int savepid(json_t * json) {
+  if (!json) { return 1; }
+  json_t * jpidfn = json_object_get(json, "pidfname");
+  //if (jpidfn) { s->pidfn = json_string_value(jpidfn); }
+  if (!jpidfn) { return 2; }
+  const char * pidfn = json_string_value(jpidfn);
+  if (pidfn && *pidfn) {
+    int pid = getpid();
+    // Always overwrite, brute force
+    FILE * logfh = fopen(pidfn, "w");
+    if (!logfh) { return 3; }
+    fprintf(logfh, "%d\n", pid);
+    if (logfh) { fclose(logfh); }
+  }
+}
 /** Main for (Micro HTTP Daemon) process app.
 * 5th param to MHD_start_daemon() defines the main connection handler
 * (that should do respective dispatching if app handles many different actions).
@@ -477,7 +496,7 @@ int main (int argc, char *argv[]) {
   char * docr = getcwd(docroot, sizeof(docroot));
   if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
   printf("Docroot: %s\n", docroot);
-  json_error_t error;
+  json_error_t error = {0};
   json_t * json = json_load_file("./procster.conf.json", 0, &error);
   if (!json) {
     /* the error variable contains error information */
@@ -486,7 +505,7 @@ int main (int argc, char *argv[]) {
   else {
      printf("Parsed JSON: %llu\n", (unsigned long long)json);
   }
-  
+  savepid(json);
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
