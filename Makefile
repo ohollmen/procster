@@ -34,7 +34,7 @@ main:
 	$(CC) -c procserver.c `pkg-config --cflags glib-2.0`
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
 	$(CC) -o procserver$(EXESUFF) procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
-	echo "Run by: ./procserver$(EXESUFF) PORT (e.g. 8181)"
+	echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
 clean:
 	rm -f procserver proclist.o proclist procs proctree.o procutil.o ulftest *.o
 test:
