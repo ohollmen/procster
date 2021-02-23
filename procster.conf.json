@@ -1,8 +1,12 @@
 {
-  "alarmage": 86400,
-  "uid": 18896,
-  "http": {
-    "port": 8181,
-    "docroot": "."
+  "user": "mrsmith",
+  "group": "users",
+  "port": 8181,
+  "docroot": ".",
+  "log": null,
+  "debug": 0,
+  "pidfname": "./procster.pid",
+  "params": {
+    "alarmage": 86400
   }
 }
