@@ -1,0 +1,23 @@
+[Unit]
+
+Description=Procster Process Monitor
+After=network.target
+
+[Service]
+# simple=non-forking
+Type=simple
+# Effective user (run-as)
+User={{ user }}
+# Translate to name to prettify ?
+Group={{ group }}
+# ExecStartPre=...
+ExecStart={{{ docroot }}}/procserver {{{ port }}}
+WorkingDirectory={{{ docroot }}}
+# Logging
+#StandardOutput=file:...
+#StandardError=file:...
+Restart=on-failure
+# PIDFile={{{ docroot }}}/procster.pid
+GuessMainPID=true
+[Install]
+WantedBy=multi-user.target
