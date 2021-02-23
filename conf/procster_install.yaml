@@ -19,15 +19,15 @@
       shell: pwd
       register: currdir
     - debug: var=currdir.stdout
-    - name: Generate Config
-      # ./node_modules/mustache/bin/mustache - ./tmpl/default.installer.menu.mustache > /tmp/default
-      shell: cat {{ currdir.stdout }}/.procster/procster.conf.json | {{ currdir.stdout }}{{pdir}}{{ mustache }} -  {{ currdir.stdout }}{{ pdir }}conf/procster.service.mustache > ./procster.service
-      delegate_to: localhost
+    #- name: Generate Config
+    #  # ./node_modules/mustache/bin/mustache - ./tmpl/default.installer.menu.mustache > /tmp/default
+    #  shell: cat {{ currdir.stdout }}/.procster/procster.conf.json | {{ currdir.stdout }}{{pdir}}{{ mustache }} -  {{ currdir.stdout }}{{ pdir }}conf/procster.service.mustache > {{ currdir.stdout }}{{pdir}}/procster.service
+    #  delegate_to: localhost
     # If unit file is on NFS we can have systemd symlink it
     # Otherwise copy to host local service account homedir (?)
     - name: Enable and start service
       # 
-      shell: 'systemctl enable --now ./procster.service'
+      shell: 'systemctl enable --now {{ currdir.stdout }}{{pdir}}/procster.service'
     # TODO: Place to stop
     # procster.service unit should be installed by now
     - name: Stop Service
