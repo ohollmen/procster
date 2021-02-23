@@ -49,7 +49,7 @@ ulf:
 docs:
 	-@mkdir doxydocs
 	doxygen .doxygen.conf
-server:
+miniserver:
 	$(CC) -c miniserver.c `pkg-config --cflags glib-2.0`
 	$(CC) -c ms_test.c `pkg-config --cflags glib-2.0`
 	$(CC) -o ms_test miniserver.o ms_test.o `pkg-config --libs glib-2.0` -ljansson -lmicrohttpd
@@ -58,4 +58,5 @@ unit:
 	mkdir -p $(HOME)/.procster/
 	# echo "No Config" && exit 1
 	if [ ! -f "$(HOME)/.procster/procster.conf.json" ]; then cp ./procster.conf.json "$(HOME)/.procster/procster.conf.json" ; fi
+	# Run this step and output to procster.service ( ... > ./procster.service)
 	cat ~/.procster/procster.conf.json | $(MUSTACHE) -  conf/procster.service.mustache

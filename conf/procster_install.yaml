@@ -1,5 +1,5 @@
 # Install Procster on a large number of machines
-# Chores before running
+# Chores before running (Do this setup once per many machines if files are on NFS, rechable by all machines)
 # - Install NPM dependencies: npm install
 # - Make sure procster config ~/.procster/procster.conf.json exists and is configured
 #   - cp procster.conf.json ~/.procster/procster.conf.json
@@ -7,12 +7,14 @@
 #   - Run "make unit" to preview before running ansible
 - name: Install procster
   become: yes
+  hosts: '{{ host }}'
   vars:
     mustache: ./node_modules/mustache/bin/mustache
     sysdunit: procster.service
+    docroot: /home/mrsmith/procster
   tasks:
     # Already have this in debug: var=ansible_env.PWD ? {{ lookup('env','PWD') }} ?
-    - Detect current dir
+    - name: Detect current dir
       shell: pwd
       register: currdir
     - debug: var=currdir.stdout
@@ -22,10 +24,11 @@
       delegate_to: localhost
     # If unit file is on NFS we can have systemd symlink it
     # Otherwise copy to host local service account homedir (?)
-    - Enable and start service
-      - shell: systemctl enable --now {{ lookup('env','PWD') }}/procster.service
+    - name: Enable and start service
+      # 
+      shell: 'systemctl enable --now {{ docroot }}/procster.service'
     # TODO: Place to stop
     # procster.service unit should be installed by now
-    - Stop Service
-      - shell: systemctl stop procster
-      - when: 0
+    - name: Stop Service
+      shell: 'systemctl stop procster'
+      when: 0

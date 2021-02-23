@@ -81,7 +81,19 @@ curl http://localhost:8181/procs
 # Prettified JSON, Inspect with pager
 curl http://localhost:8181/procs | python -m json.tool | less
 ```
+## Installing on large number of machines
 
+Initial install:
+```
+# Run copying of config JSON as template
+make unit
+# Edit ~/.procster/procster.conf.json for your env.
+# keep documentroot to absolute path (for e.g. systemd reasons)
+cat ~/.procster/procster.conf.json | ./node_modules/mustache/bin/mustache -  conf/procster.service.mustache > ./procster.service
+# Install (Example)
+# Inventory in ~/.procster
+ansible-playbook -i ~/.procster/hosts conf/procster_install.yaml -b --extra-vars "ansible_user=mrsmith ansible_sudo_pass=s3Cr3t hosts=myhost"
+```
 ## Compiling procps-ng afresh for Centos
 
 ```
