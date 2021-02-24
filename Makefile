@@ -62,6 +62,6 @@ unit:
 	cat ~/.procster/procster.conf.json | $(MUSTACHE) -  conf/procster.service.mustache
 covmodel:
 	# -I/usr/include/glib-2.0/ $(GLIB_CFLAGS)
-	gcc -c covmodels.c `pkg-config --cflags glib-2.0`
+	gcc -c conf/covmodels.c `pkg-config --cflags glib-2.0`
 	echo "Test Compiled Model"
 	
