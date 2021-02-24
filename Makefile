@@ -60,3 +60,8 @@ unit:
 	if [ ! -f "$(HOME)/.procster/procster.conf.json" ]; then cp ./procster.conf.json "$(HOME)/.procster/procster.conf.json" ; fi
 	# Run this step and output to procster.service ( ... > ./procster.service)
 	cat ~/.procster/procster.conf.json | $(MUSTACHE) -  conf/procster.service.mustache
+covmodel:
+	# -I/usr/include/glib-2.0/ $(GLIB_CFLAGS)
+	gcc -c covmodels.c `pkg-config --cflags glib-2.0`
+	echo "Test Compiled Model"
+	

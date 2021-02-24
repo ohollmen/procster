@@ -56,7 +56,7 @@ int proc_kill(int pid) {
   }
   int err = kill(pid, SIGKILL);
   if (err) {
-     char errbuf[64];
+     //char errbuf[64];
      printf("Error killing: %d (%s)\n", errno, strerror(errno)); // strerror_r(errno, errbuf) GNU
      return 0;
   }

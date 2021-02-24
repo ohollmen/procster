@@ -86,6 +86,7 @@ char docroot[256] = {0};
 
 char * proc_list_json(int flags);
 // char * proc_list_json2(int flags);
+#ifdef NEED_POSTDATA_ITER
 /** 
 See: https://www.gnu.org/software/libmicrohttpd/tutorial.html#Processing-POST-data
 MHD_PostDataIterator
@@ -93,14 +94,16 @@ MHD_PostDataIterator
 static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char *key,
               const char *filename, const char *content_type,
               const char *transfer_encoding, const char *data, 
-	      uint64_t off, size_t size)
+              uint64_t off, size_t size)
 {
-  CONNINFO *con_info = coninfo_cls;
+  CONNINFO * con_info = coninfo_cls;
   printf("Got: %s\n", data);
   // Fill answer string
   
   return MHD_YES;
 }
+#endif
+
 /** Generic string content sending.
 * @param connection MHD_Connection / single request (See MHD Docs)
 * @return Return the kind of values that MHD request handler returns (MHD_NO, ...).
@@ -116,7 +119,7 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
   // Correct place for setting headers
   // MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE, "text/html");
   ret = MHD_queue_response (connection, status_code, response);
-  MHD_destroy_response (response);
+  MHD_destroy_response (response); response = NULL; // Model ?
   return ret;
 }
 
@@ -127,7 +130,13 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
 * as 5th and 8th params respectively).
 * 
 */
-void con_info_destroy(CONNINFO *con_info) { free(con_info->postdata); free(con_info->conttype); free(con_info); return; }
+void con_info_destroy(CONNINFO *con_info) {
+  if (!con_info) { return; }
+  if (con_info->postdata) { free(con_info->postdata); }
+  if (con_info->conttype) { free(con_info->conttype); }
+  free(con_info);
+  return;
+}
 /** Allocate CONNINFO for POST Parsing.
  * CONNINFO is used to keep track of body retrieval / buffering state across multiple calls
  * to 
@@ -144,7 +153,7 @@ CONNINFO *con_info_create(struct MHD_Connection *connection) {
   if (!con_info) { return NULL; } // 0
   // NEW:
   con_info->contlen  = atoi(clen);
-  con_info->conttype = strdup(ct);
+  con_info->conttype = strdup(ct); // if (ct) { ... } ?
   // Allow contlen to dictate initial size. Reallocations should not occur w. this.
   if (con_info->contlen) { initsize = con_info_need_mem(con_info, con_info->contlen); }
   // Test against post_body_max (from where ?)
@@ -152,7 +161,7 @@ CONNINFO *con_info_create(struct MHD_Connection *connection) {
   con_info->postdata = (char*)calloc(initsize, sizeof(char)); // TODO: Decide on initial size (config?)
   // con_info->is_parsing = 0; con_info->used = 0; // Redundant w. calloc
   con_info->size = initsize;
-  con_info->debug = 1; // TODO: Pass/consider config
+  con_info->debug = 1; // TODO: Pass/consider config or simply set outside
   if (con_info->debug) { fprintf(stderr, "create(): con_info =  %p\n", con_info); }
   return con_info;
 }
@@ -238,7 +247,7 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
 #define parse_running(c)  ((*con_cls) && (c->is_parsing == 1))
 // Usage: parse_ending(c) . TODO: consider if we should stick with setting state (2) inside POST parser (NOT macro)
 #define parse_ending(c)   ((*con_cls) && (!*upload_data_size) && (c->is_parsing) && (c->is_parsing = 2)) // COMPLETE
-
+/** MHD POST Handler example. Echoes back the request content (w/o parsing it in between). */
 int answer_to_connection (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
@@ -247,19 +256,21 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   
   printf("URL(%s): %s Datasize: %lu, con_cls: %p\n", method, url, *upload_data_size, *con_cls);
   
-  CONNINFO *con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
-  if (parse_no_state(con_info)) { return MHD_NO; }
+  CONNINFO * con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
+  if (parse_no_state(con_info)) { return MHD_NO; } // 0 con_info_create() failed ?
   if (parse_starting(con_info)) { return MHD_YES; }
   int pret = post_body_parse(connection, upload_data, upload_data_size, con_cls);
   if (!pret) { return MHD_NO; } // Fatal error - terminate request
   if (parse_running(con_info))  { return MHD_YES; }
+  /* coverity[assign_where_compare_meant] */
   parse_ending(con_info);
   ////////// Send the response the most ordinary way /////////////
   struct MHD_Response *
     response = MHD_create_response_from_buffer(strlen(con_info->postdata), (void*)con_info->postdata, MHD_RESPMEM_MUST_COPY);
-  MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+  if (con_info) { con_info_destroy(con_info); } // Must free !
+  int ok   = MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json"); if (!ok) { return MHD_NO; }
   int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
-  MHD_destroy_response(response);
+  MHD_destroy_response(response); // Model
 
   return ret;
 }
@@ -283,14 +294,15 @@ int answer_to_connection1 (void *cls, struct MHD_Connection *connection,
   if (!pret) { return MHD_NO; } // Fatal error - terminate request
   if (!*con_cls) { fprintf(stderr, "No *con_cls - should never happen!\n"); return MHD_NO; } // assert
   con_info = *con_cls; 
-  if (con_info->is_parsing < 2) { return MHD_YES; } // 2 = COMPLETE
+  if (con_info->is_parsing < 2) { return MHD_YES; } // 2 = COMPLETE, so not complete yet
   // *con_cls = NULL; /// NOT Needed if handled by (See: ...) MHD_OPTION_NOTIFY_COMPLETED
   ////////// Send the response the most ordinary way /////////////
   struct MHD_Response *
     response = MHD_create_response_from_buffer(strlen(con_info->postdata), (void*)con_info->postdata, MHD_RESPMEM_MUST_COPY);
-  MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json");
+  if (con_info) { con_info_destroy(con_info); } // Must free !
+  int ok  = MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json"); if (!ok) { return MHD_NO; }
   int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
-  MHD_destroy_response(response);
+  MHD_destroy_response(response); // Model
 
   return ret;
 }
@@ -360,11 +372,12 @@ struct MHD_Response * trystatic(const char * url) {
   if (sok < 0) { return 0; }
   uint64_t size = statbuf.st_size; // off_t
   printf("Ready to create response from fd: %d (%ld B)\n", fd, size);
-  struct MHD_Response * response = MHD_create_response_from_fd(size, fd);
+  // MHD will close fd after. Note also _from_fd_at_offset(..., offset)
+  struct MHD_Response * response = MHD_create_response_from_fd(size, fd); // Model
   // Extract suffix
   char * suff = strrchr(url, '.');
   if (suff) { printf("Found suffix: '%s'\n", ++suff); }
-  char * defmime = "text/plain";
+  //char * defmime = "text/plain"; // DECLARED_BUT_NOT_REFERENCED
   //MHD_add_response_header (response, "Content-Type", defmime);
   // close(fd);
   return response;
@@ -410,20 +423,24 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     json_t * array = proc_list_json2(0); // Produce Process list content (OLD: page = ...)
     page = json_dumps(array, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
-    json_decref(array);
+    json_decref(array); array = NULL; // Model
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
   }
-  else if (!strncmp(url, "/proctree", 6)) {
+  else if (!strncmp(url, "/proctree", 9)) { // 6?
     ctype = "application/json";
     proc_t * root = proc_tree();
+    json_t * obj = NULL;
+    // PW.BRANCH_PAST_INITIALIZATION - event: "A goto jumps past the initialization of a variable"
     if (!root) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
-    json_t * obj = ptree_json(root, 0);
+    //json_t *
+    obj = ptree_json(root, 0);
     page = json_dumps(obj, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
-    ptree_free(root, 0);
-    json_decref(obj);
+    ptree_free(root, 0); // Model
+    // "Resource \"root\" is not freed or pointed-to in \"ptree_free\"."
+    json_decref(obj); obj = NULL; // Model ?
     CHECKPAGE:
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
@@ -433,19 +450,22 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   //else if ("/kill/:pid") {}
   else {
     response = trystatic(url);
-    if (response) { ret = MHD_YES; goto QUEUE_REQUEST; }
+    // "Overwriting previous write to \"ret\" with value from \"MHD_queue_response(connection, 200U, response)\".
+    // "An assigned value that is never used may represent unnecessary computation, an incorrect algorithm, or possibly the need for cleanup or refactoring."
+    if (response) {  goto QUEUE_REQUEST; } // Had: ret = MHD_YES; ()
     ctype = "text/plain"; printf("No action match for URL: %s\n", url);
   }
   // Check "page" once more 
   if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
   // memmode should be in MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY, MHD_RESPMEM_MUST_FREE
   response = MHD_create_response_from_buffer (strlen(page), (void*) page, memmode);
-  MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
+  int ok = 0;
+  ok = MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
   // Allow cross-domain ref (example from docker headers setup w. daemon cl opts --api-cors-header *)
   
-  MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
-  MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
-  MHD_add_response_header (response, "ccess-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
   
   // MHD_add_response_header (response, "Content-Type", "");
   //  return request; }
@@ -454,14 +474,14 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
   
-  if (response) { MHD_destroy_response(response); }
+  if (response) { MHD_destroy_response(response); } // Model ?
   return ret;
 }
 /** Post request Callback launched by MHD after completing request.
 * 
 */
 void req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, enum MHD_RequestTerminationCode toe) {
-  fprintf(stderr, "Request Terminated (con_cls=%p, cls=%p) !\n", *con_cls, cls);
+  fprintf(stderr, "Request Terminated (con_cls=%p, cls=%p) !\n", con_cls, cls); // Was *con_cls: "Directly dereferencing pointer \"con_cls\"."
   if (! con_cls || !*con_cls) { return; } // Important. See manual p. 18
   con_info_destroy((CONNINFO *) *con_cls);
   *con_cls = NULL; // Comm. to MHD
@@ -507,7 +527,7 @@ int main (int argc, char *argv[]) {
      printf("Parsed JSON: %llu\n", (unsigned long long)json);
   }
   int piderr = savepid(json);
-  if (piderr) { printf("Error %d saving PID\n"); }
+  if (piderr) { printf("Error %d saving PID\n", piderr); }
   // apc - Accept Policy Callback
   int flags = MHD_USE_SELECT_INTERNALLY;
   mhd = MHD_start_daemon (flags, port, NULL, NULL,

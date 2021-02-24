@@ -105,7 +105,7 @@ proc_t * proc_tree(void) {
   PROCTAB*  proctab = openproc(flags); // , uidarr, 1); // TODO: readproctab(0); ?
   while (procp = readproc(proctab, NULL)) { // ALT: &proc
     proc_chn_init(procp); // Reserve use (for children)
-    // debug && printf("%d (ppid: %d) ", procp->tid, procp->ppid);
+    debug && printf("%d (ppid: %d) ", procp->tid, procp->ppid);
     g_hash_table_insert(ht, GINT_TO_POINTER(procp->tid), procp);
     // No parent - Parent to (as a child of) p0 / kernel
     if (!procp->ppid) {
@@ -132,7 +132,7 @@ proc_t * proc_tree(void) {
   // g_slist_foreach(list, doit, (void*)ht);
   for (iter = list; iter; iter = iter->next) {
     proc_t * p = (proc_t*)(iter->data);
-    // printf("Current item is %d, ppid: %d\n", p->tid, p->ppid);
+    debug && printf("Current item is %d, ppid: %d\n", p->tid, p->ppid);
     proc_t * par = g_hash_table_lookup (ht, GINT_TO_POINTER(p->ppid));
     if (!par) {
       printf("Par not looked up even if all procs are added !\n"); // continue;
@@ -142,11 +142,11 @@ proc_t * proc_tree(void) {
     par_add_child(par, p);
   }
   // } // ptree_link_orphans
-  g_slist_free(list); list = NULL; // Free temp helper
-  // printf("HT: %d keys\n", g_hash_table_size(ht));
+  g_slist_free(list); list = NULL; // Free temp helper // Model
+  debug && printf("HT: %d keys\n", g_hash_table_size(ht));
   g_hash_table_unref(ht); // g_hash_table__destroy(ht) // Calling early will corrupt tid
   ht = NULL;
-  // printf("The list is now %d items long\n", g_slist_length(list));
+  // printf("The list is now %d items long\n", g_slist_length(list)); // 0 now
   
   return p0;
 }

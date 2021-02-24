@@ -60,7 +60,8 @@
 #define IS_KTHREAD(proc)  (proc.ppid <= 2)
 // using namespace std;
 
-int arr2json(char ** arr, int cnt) {
+int arr2json(char ** arr, int cnt) { // FILE * fh ?
+  if (!arr) { return 1; }
   fputs("[\n", stdout);
   int i;
   for (i=0 ; i < cnt; i++) {
@@ -69,6 +70,7 @@ int arr2json(char ** arr, int cnt) {
   }
   
   fputs("]\n", stdout);
+  return 0;
 }
 /* Default flags as
 NOT: PROC_FILLENV
@@ -102,7 +104,7 @@ char * proc_list_json(int flags) {
   // PROC_FILLUSR
   if (!flags) { flags = PROC_FLAGS_DEFAULT; } // Default flags (old: flags_def)
   PROCTAB * proclist = openproc(flags);
-  if (!proclist) { fputs("openproc() Error\n", stderr); return NULL; }
+  if (!proclist) { free(jsonstr); fputs("openproc() Error\n", stderr); return NULL; } // Must free() !
   for (i=0 ; readproc(proclist, &proc) != NULL; i++) {
     // procstrbuf
     // Kernel thread ppid == 0
@@ -123,7 +125,8 @@ char * proc_list_json(int flags) {
     } // (jpos / jlen) > 0.95
   }
   closeproc(proclist);
-  jpos -= 2; jsonstr[jpos] = '\0'; strncat(jsonstr, "\n]\n", 3); jpos += 3;
+  jpos -= 2; jsonstr[jpos] = '\0'; strncat(jsonstr, "\n]\n", 3); jpos += 3; // <= Was: jpos Not used anymore
+  jlen = jpos; // now used
   return jsonstr;
 }
 
