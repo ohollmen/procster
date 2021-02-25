@@ -92,7 +92,8 @@ proc_t * proc_tree(void) {
   GSList * list = NULL; // Container/List for unresolved parents
   // Alloc for kernel / PID:0
   proc_t * p0 = (proc_t*)calloc(1, sizeof(proc_t));
-  if (!p0) { printf("root calloc failure !\n"); return NULL; }
+  if (!p0) { g_hash_table_unref(ht); printf("root calloc failure !\n"); return NULL; } // TODO: Converge at bottom FINALLY
+  // if (!p0) { printf("root calloc failure !\n"); goto FINALLY; }
   sprintf(p0->cmd, "vmlinux");
   sprintf(p0->ruser, "root");
   p0->nlwp = 1; // Threads
@@ -107,7 +108,7 @@ proc_t * proc_tree(void) {
     proc_chn_init(procp); // Reserve use (for children)
     debug && printf("%d (ppid: %d) ", procp->tid, procp->ppid);
     g_hash_table_insert(ht, GINT_TO_POINTER(procp->tid), procp);
-    // No parent - Parent to (as a child of) p0 / kernel
+    // No parent - Parent this to (as a child of) p0 / kernel
     if (!procp->ppid) {
       par_add_child(p0, procp);
       //goto DONEPROC;
@@ -125,7 +126,7 @@ proc_t * proc_tree(void) {
     // debug && printf(" %s ", procp->lxcname); // Check usage
     // debug && puts("\n");
   }
-  closeproc(proctab);
+  if (proctab) { closeproc(proctab); }
   // Reiterate children whose parents were not found on the first round.
   // void ptree_link_orphans(proc_t * p0, GHashTable * ht, GSList * list) {
   GSList * iter = NULL;
@@ -142,10 +143,11 @@ proc_t * proc_tree(void) {
     par_add_child(par, p);
   }
   // } // ptree_link_orphans
-  g_slist_free(list); list = NULL; // Free temp helper // Model
+  FINALLY:
+  if (list) { g_slist_free(list); list = NULL; } // Free temp helper // Model
   debug && printf("HT: %d keys\n", g_hash_table_size(ht));
-  g_hash_table_unref(ht); // g_hash_table__destroy(ht) // Calling early will corrupt tid
-  ht = NULL;
+  if (ht) { g_hash_table_unref(ht); ht = NULL; }// g_hash_table__destroy(ht) // Calling early will corrupt tid
+  
   // printf("The list is now %d items long\n", g_slist_length(list)); // 0 now
   
   return p0;

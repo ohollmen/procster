@@ -119,7 +119,7 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
   // Correct place for setting headers
   // MHD_add_response_header (response, MHD_HTTP_HEADER_CONTENT_TYPE, "text/html");
   ret = MHD_queue_response (connection, status_code, response);
-  MHD_destroy_response (response); response = NULL; // Model ?
+  MHD_destroy_response (response); // response = NULL; // Model ?
   return ret;
 }
 
@@ -251,16 +251,17 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
 int answer_to_connection (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
-  if (!strcmp (method, "GET")) {return send_page(connection, "No GET allowed !!!\n", MHD_HTTP_OK);}
+  if (!strcmp (method, "GET")) { return send_page(connection, "No GET allowed !!!\n", MHD_HTTP_OK); }
   // Must be POST or PUT w. Body
   
   printf("URL(%s): %s Datasize: %lu, con_cls: %p\n", method, url, *upload_data_size, *con_cls);
   
   CONNINFO * con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
   if (parse_no_state(con_info)) { return MHD_NO; } // 0 con_info_create() failed ?
-  if (parse_starting(con_info)) { return MHD_YES; }
+  /* */
+  if (parse_starting(con_info)) { return MHD_YES; } // 1 
   int pret = post_body_parse(connection, upload_data, upload_data_size, con_cls);
-  if (!pret) { return MHD_NO; } // Fatal error - terminate request
+  if (!pret) { if (con_info) { con_info_destroy(con_info); } return MHD_NO; } // Fatal error - terminate request
   if (parse_running(con_info))  { return MHD_YES; }
   /* coverity[assign_where_compare_meant] */
   parse_ending(con_info);
@@ -369,7 +370,7 @@ struct MHD_Response * trystatic(const char * url) {
   if (fd < 0) { return 0; }
   struct stat statbuf = {0};
   int sok = fstat(fd, &statbuf);
-  if (sok < 0) { return 0; }
+  if (sok < 0) { close(fd); return 0; } // Must close() !
   uint64_t size = statbuf.st_size; // off_t
   printf("Ready to create response from fd: %d (%ld B)\n", fd, size);
   // MHD will close fd after. Note also _from_fd_at_offset(..., offset)
@@ -423,7 +424,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     json_t * array = proc_list_json2(0); // Produce Process list content (OLD: page = ...)
     page = json_dumps(array, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
-    json_decref(array); array = NULL; // Model
+    json_decref(array); // array = NULL; // Model
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
@@ -436,11 +437,12 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     if (!root) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
     //json_t *
     obj = ptree_json(root, 0);
+    if (!obj) { ptree_free(root, 0); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
     page = json_dumps(obj, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
-    ptree_free(root, 0); // Model
+    ptree_free(root, 0);  // Model
     // "Resource \"root\" is not freed or pointed-to in \"ptree_free\"."
-    json_decref(obj); obj = NULL; // Model ?
+    json_decref(obj); // obj = NULL; // Model ?
     CHECKPAGE:
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error

@@ -125,8 +125,8 @@ char * proc_list_json(int flags) {
     } // (jpos / jlen) > 0.95
   }
   closeproc(proclist);
-  jpos -= 2; jsonstr[jpos] = '\0'; strncat(jsonstr, "\n]\n", 3); jpos += 3; // <= Was: jpos Not used anymore
-  jlen = jpos; // now used
+  jpos -= 2; jsonstr[jpos] = '\0'; strncat(jsonstr, "\n]\n", 3); // jpos += 3; // <= Was: jpos Not used anymore
+  //jlen = jpos; // not used
   return jsonstr;
 }
 
