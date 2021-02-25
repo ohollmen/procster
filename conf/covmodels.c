@@ -28,6 +28,7 @@
 #define MHD_YES 1
 typedef void * json_t;
 typedef void * GSList;
+typedef void * proc_t;
 
 struct MHD_Response *
 MHD_create_response_from_buffer (size_t size, void *buffer,
