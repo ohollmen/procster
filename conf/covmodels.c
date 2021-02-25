@@ -18,11 +18,17 @@
 * # TODO
 * Create headers for  __coverity_... functions ?
 */
+/*
 #include <microhttpd.h> // MHD
 #include <unistd.h> // close()
 #include <jansson.h> // json_decref
 #include <glib.h> // g_slist_free
 //#include <glib-2.0/glib.h>
+*/
+#define MHD_YES 1
+typedef void * json_t;
+typedef void * GSList;
+
 struct MHD_Response *
 MHD_create_response_from_buffer (size_t size, void *buffer,
     enum MHD_ResponseMemoryMode mode) {
