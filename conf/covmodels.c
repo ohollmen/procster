@@ -76,3 +76,7 @@ void g_slist_free(GSList *list) {
   __coverity_free__(list);
   return;
 }
+
+void freeproc(proc_t * p) {
+  __coverity_free__(p);
+}
