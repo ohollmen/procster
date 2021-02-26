@@ -72,7 +72,14 @@ Test CLI Utility output (No HTTP involved):
 ```
 Run HTTP/REST/JSON Process server (pass port as arg):
 ```
+# On terminal/console (blocking)
 procserver 8181
+# Via systemd (See Makefile for instructions to generate unit file)
+# See unit file for hints and instructions
+# Once only:
+sudo systemctl enable --now `pwd`/procster.service
+# Later use normal systemd commands (leave out .service)
+sudo systemctl restart procster
 ```
 Test HTTP Output:
 ```
@@ -93,6 +100,8 @@ cat ~/.procster/procster.conf.json | ./node_modules/mustache/bin/mustache -  con
 # Install (Example)
 # Inventory in ~/.procster
 ansible-playbook -i ~/.procster/hosts conf/procster_install.yaml -b --extra-vars "ansible_user=mrsmith ansible_sudo_pass=s3Cr3t hosts=myhost"
+# Restart
+ansible-playbook -i ~/.procster/hosts conf/procster_restart.yaml -b --extra-vars "ansible_user=mrsmith ansible_sudo_pass=s3Cr3t hosts=myhost"
 ```
 ## Compiling procps-ng afresh for Centos
 
