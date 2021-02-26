@@ -83,7 +83,8 @@ struct response {
   char * cont;
   int contlen;
   char * conttype;
-  int memmode; // 
+  int memmode; // For cont. Default: _FREE
+  // int fd; // Option for sending file
   // Response Status code (e.g. 200, 404 ...)
   int code;
 };
