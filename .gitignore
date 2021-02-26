@@ -8,3 +8,9 @@ doxydocs
 node_modules
 doxy_docs
 procster.pid
+Procster.geany
+old
+# For now web stuff
+index.html
+jsx
+package-lock.json
