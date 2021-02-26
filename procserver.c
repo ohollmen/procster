@@ -523,7 +523,7 @@ void daemon_prep() {
   dup2(fd1, 1);
   dup2(fd1, 2);
   int pid = setsid(); // pg leader, session leader
-  printf("PG/Sess Leader: %d\n");
+  printf("PG/Sess Leader: %d\n", pid);
 }
 /* Daemonize
  * - Close files

@@ -1,6 +1,6 @@
 # Allow declarations in the first part of (3-part) for-loop.
 # For kill() and strdup() we must use _POSIX_C_SOURCE
-# Use -g here for debugging
+# Use -g here for debugging, also good to have -Wall
 CC=gcc -O2 -std=c99 -D_POSIX_C_SOURCE=200809
 LIBS=-lmicrohttpd -lprocps -ljansson
 # For Ulfius apps /usr/include/ulfius.h
