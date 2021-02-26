@@ -28,7 +28,7 @@ errs.forEach((re) => {
   var lnum = re.mainEventLineNumber;
   var func = re.functionDisplayName; // Can be null (!)
   var evs = re.events;
-  if (!evs) { throw "No events for "; }
+  if (!evs) { throw "No events for defect"; }
   var err = fcache_add(fname);
   
   if (err) { console.log("Err: "+err+ " caching "+fname+""); process.exit(1); }
