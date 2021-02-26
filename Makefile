@@ -35,8 +35,11 @@ main:
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
 	$(CC) -o procserver$(EXESUFF) procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
 	echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
+objclean:
+	rm -f proclist.o proctree.o procutil.o proclist_main.o procserver.o
+	#rm -f  *.o
 clean:
-	rm -f procserver proclist.o proclist procs proctree.o procutil.o ulftest *.o
+	rm -f procserver procs  ulftest ms_test
 test:
 	# -d "data"
 	curl -X POST -H "Content-Type: application/json" --data-binary @test.json --output - http://localhost:8001/json
