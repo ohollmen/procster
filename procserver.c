@@ -448,6 +448,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
   }
+  // Others: /uptime (/proc/uptime) /loadavg /proc/loadavg
   // Match
   //else if ("/kill/:pid") {}
   else {
@@ -507,31 +508,42 @@ int savepid(json_t * json) {
   }
   return 0;
 }
-/** Main for (Micro HTTP Daemon) process app.
-* 5th param to MHD_start_daemon() defines the main connection handler
-* (that should do respective dispatching if app handles many different actions).
-*/
-int main (int argc, char *argv[]) {
+
+void daemon_prep() {
+#include <sys/time.h>
+#include <sys/resource.h>
+  struct rlimit r;
+  getrlimit(RLIMIT_NOFILE, &r);
+  // Leave open 0,1,2
+  for (int i=3;i<r.rlim_max;i++) { close(i); }
+  printf("daemon_prep(): Closed files (>=3), Turn output off 1,2\n");
+  //return;
+  int fd1 = open("/dev/null", O_RDWR);
+  //dup2(fd1, 0); // Extra trial. if this is dup2()d, There's immediate exit !
+  dup2(fd1, 1);
+  dup2(fd1, 2);
+  int pid = setsid(); // pg leader, session leader
+  printf("PG/Sess Leader: %d\n");
+}
+/* Daemonize
+ * - Close files
+ * - Set as session leader
+ */
+void daemon_launch(int port, json_t * json) {
   struct MHD_Daemon * mhd = NULL;
-  if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
-  int port = atoi(argv[1]);
-  
-  char * docr = getcwd(docroot, sizeof(docroot));
-  if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
-  printf("Docroot: %s\n", docroot);
-  json_error_t error = {0};
-  json_t * json = json_load_file("./procster.conf.json", 0, &error);
-  if (!json) {
-    /* the error variable contains error information */
-    printf("JSON parsing error: %s\n", error.text);
+  int log = 1;
+  char * logfn = "/tmp/procster.log";
+  FILE * fh = stdout;
+  if (log) {
+    fh = fopen(logfn, "wb");
+    setbuf(fh, NULL);
   }
-  else {
-     printf("Parsed JSON: %llu\n", (unsigned long long)json);
-  }
+  // Refresh FD:s ? Systemd can capture output
   int piderr = savepid(json);
-  if (piderr) { printf("Error %d saving PID\n", piderr); }
+  if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); }
   // apc - Accept Policy Callback
-  int flags = MHD_USE_SELECT_INTERNALLY;
+  // MHD_USE_TCP_FASTOPEN, MHD_USE_AUTO (poll mode), MHD_USE_DEBUG == MHD_USE_ERROR_LOG
+  int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD; 
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
     // NOTE: Connection handler: answer_to_connection*
     &answer_to_connection0, NULL,
@@ -539,9 +551,47 @@ int main (int argc, char *argv[]) {
     NULL, NULL, // req_term_cb, userdata MHD Manual p. 18 ()
     
     MHD_OPTION_END); 
-  if (NULL == mhd) { printf("Could not start MHD (check if port %d is taken)\n", port);return 3; }
-  printf("Starting Micro HTTP daemon at port %d (Try: http://localhost:%d/)\n", port, port);
-  (void) getchar ();
-  //MHD_stop_daemon (mhd);
+  if (NULL == mhd) { fprintf(fh, "Could not start MHD (check if port %d is taken)\n", port); } // return 3;
+  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/)\n", port, port, getpid());
+  int ok = 100; // MHD_run(mhd); // MHD_YES on succ
+  // Note:
+  // - Starting w. systemd we always receive EOF (-1) here immediately (!?)
+  // Starting from terminal (even with --daemon) we receieve the char we first typed, even if *only*
+  // '\n' triggers return (line-buffering).
+  //(void) getchar ();
+  //int c = getchar();
+  int c;
+  while (c = getchar()) {
+    if (c == 255) { break; }
+  }
+  fprintf(fh, "Stopping Daemon (getchar=%d, ok=%d)\n", c, ok);
+  MHD_stop_daemon (mhd);
+}
+/** Main for (Micro HTTP Daemon) process app.
+* 5th param to MHD_start_daemon() defines the main connection handler
+* (that should do respective dispatching if app handles many different actions).
+*/
+int main (int argc, char *argv[]) {
+  
+  if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
+  int port = atoi(argv[1]);
+  int daemon = 0;
+  for (int i=0;i<argc;i++) { if (!strcmp(argv[i], "--daemon")) { daemon = 1; break; }} // printf("%s\n", argv[i]);
+  printf("Daemonize=%d (main pid=%d)\n", daemon, getpid());
+  char * docr = getcwd(docroot, sizeof(docroot));
+  if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
+  printf("Docroot: %s\n", docroot);
+  json_error_t error = {0};
+  /* the error variable contains error information */
+  json_t * json = json_load_file("./procster.conf.json", 0, &error);
+  if (!json) { printf("JSON parsing error: %s\n", error.text); }
+  else { printf("Parsed JSON: %llu\n", (unsigned long long)json); }
+  if (!daemon) { goto RUN; }
+  pid_t pid = fork();
+  if (pid == 0) { printf("Parent exiting\n"); return 0; }
+  daemon_prep(); // In child only
+  RUN:
+  daemon_launch(port, json);
+  
   return 0;
 }
