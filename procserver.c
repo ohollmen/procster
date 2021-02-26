@@ -552,7 +552,7 @@ void daemon_launch(int port, json_t * json) {
     
     MHD_OPTION_END); 
   if (NULL == mhd) { fprintf(fh, "Could not start MHD (check if port %d is taken)\n", port); } // return 3;
-  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/)\n", port, port, getpid());
+  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/)\n", port, getpid(), port);
   int ok = 100; // MHD_run(mhd); // MHD_YES on succ
   // Note:
   // - Starting w. systemd we always receive EOF (-1) here immediately (!?)
