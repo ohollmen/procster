@@ -8,6 +8,6 @@
     "jquery": "*",
     "jquery-ui-dist": "*",
     "mustache": "4.1.0",
-    "router66": "1.0.4"
+    "router66": "^1.0.4"
   }
 }
