@@ -147,6 +147,7 @@ json_t * proc_to_json(proc_t * proc, char * cmdline) {
   if (proc->cmdline && ok) { json_object_set_new_nocheck(obj, "cmdline",  json_string(cmdline)); }
   json_object_set_new_nocheck(obj, "ppid", json_integer(proc->ppid));
   json_object_set_new_nocheck(obj, "rss",  json_integer(proc->rss));
+  json_object_set_new_nocheck(obj, "size", json_integer(proc->size));
   // Times: start_time (should be seconds after 1970-1-1, but rolls on!)
   //proc_st_iso(proc, isotime, 32, 0); // ISO
   time_t ts = proc_stime_ux(proc);
