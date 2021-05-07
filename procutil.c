@@ -43,7 +43,7 @@ GSList * par_get_ch(proc_t * p) {
 /** Kill process by sending SIGKILL signal to it.
  * See also man 7 signal and man 2 kill.
  * @param pid - PID of individual process (>= 1)
- * @return 1 for process being killed 0 for errors
+ * @return 0 for process being killed successfully, 1 and up for errors
  */
 int proc_kill(int pid) {
   // int pid = 14197; // 1000000;
@@ -52,15 +52,15 @@ int proc_kill(int pid) {
   // - all possible processes by pid == -1
   // - process group by -pid when pid < -1
   if (pid < 1) {
-    printf("Process PID (for kill) must be postitive"); return 0;
+    printf("Process PID (for kill) must be postitive"); return 1;
   }
   int err = kill(pid, SIGKILL);
   if (err) {
      //char errbuf[64];
      printf("Error killing: %d (%s)\n", errno, strerror(errno)); // strerror_r(errno, errbuf) GNU
-     return 0;
+     return 2;
   }
-  return 1;
+  return 0;
 }
 /** Convert / Format p->start_time into human readable ISO time.
 * @param p - Process
@@ -99,9 +99,9 @@ int gsleader(proc_t * p) {
 * back into *real* runnable properly formatted  commandline string.
 * Approximate is good enough for this process listing usage.
 * 
-* @param list Array of Strings
-* @param buf String buffer where Array items are serialized space-separated (must contain enough space for )
-* @return true for serialization being done, 0 for list being NUUL (no serialization *can* be done).
+* @param list - Array of Strings
+* @param buf - String buffer where Array items are serialized space-separated (must contain enough space for )
+* @return true/1 for serialization being done, 0 for list being NUlL (no serialization *can* be done).
 * @todo Pass buffer size
 */
 int list2str(char ** list, char buf[], int size) {
@@ -224,8 +224,8 @@ json_t * ptree_json(proc_t * p, int lvl) { // , json_t * obj
   return obj;
 }
 /** Free/Release the tree of processes.
-* Release custom used (OLD:lxcname) "sd_uunit" member (GSList *) and mark it unallocated (NULL).
-* to not accidentally free it wrongly (or leak memory)
+* Release custom used (OLD:lxcname) "sd_uunit" member (GSList *) and mark it unallocated (NULL)
+* to not accidentally free it wrongly (or leak memory).
 * @param p - Root process
 * @param lvl - Recursion level (explicit caller should pass 0)
 * @return None

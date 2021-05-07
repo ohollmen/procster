@@ -56,7 +56,7 @@
 
 #include <unistd.h> // getcwd(), access(), getpid()
 #include <jansson.h> // For config
-
+#include <ctype.h> // isdigit()
 #include "proclister.h"
 
 // MUST be min 256
@@ -399,6 +399,21 @@ int basic_creds_ok(struct MHD_Connection *connection) {
   // if (strcmp(corrpass, pass)) { return 0; }
   return 1;
 }
+/** Extract pid number from (relative) Web URL.
+ * @param url - procserver kill process URL
+ * @return pid number or 0 on failure to extract pid properly
+ */
+int pid_extract(const char * url) {
+  int pid = 0;
+  if (!url) { return 0; }
+  int len = strlen(url);
+  if (len > 15) {return 0; }
+  int i = len-1;
+  for(;(i > 4) && isdigit(url[i]);) { printf("Isdig: %d\n", i); i--; }
+  printf("Scanned pid start to: %d\n", i);
+  if (i) { pid = atoi(&(url[i+1])); }
+  return pid;
+}
 /** Create OS Process listing.
 * Example of simple GET handling of HTTP Request.
 */
@@ -414,10 +429,13 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   size_t jflags = JSON_INDENT(2);
   
   char * errpage = "{\"status\": \"err\", \"msg\": \"Error: ...\"}"; // TODO: produce as jansson D.S.
+  char * okpage = "{\"status\": \"ok\", \"data\": \"Ran OK\"}";
   // printf("URL(%s): %s (Body Datasize: %lu)\n", method, url, *upload_data_size);
   printf("URL(%s): %s\n", method, url);
+  int ok = 0; // Must be early to not "pass initialization" (cov)
+  int httpcode = MHD_HTTP_OK;
   // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
-  if (!strncmp(url, "/procs", 6) || !strncmp(url, "/proclist", 9)) {
+  if ( !strcmp(url, "/proclist")) { // , 9  !strncmp(url, "/procs", 6) ||
     //
     ctype = "application/json";
     // struct MHD_Response * create_proclisting_json2(const char * url) {
@@ -429,7 +447,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
   }
-  else if (!strncmp(url, "/proctree", 9)) { // 6?
+  else if (!strcmp(url, "/proctree")) { // 6? , 9
     ctype = "application/json";
     proc_t * root = proc_tree();
     json_t * obj = NULL;
@@ -450,7 +468,22 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   }
   // Others: /uptime (/proc/uptime) /loadavg /proc/loadavg
   // Match
-  //else if ("/kill/:pid") {}
+  else if (!strncmp(url, "/kill/", 6)) {
+    char pidstr[20] = {0};
+    int pid = pid_extract(url);
+    if (pid) {
+      printf("Got valid pid: %d\n", pid);
+      if (pid <= 0) { printf("pid <= 0, error out for now.\n"); goto ERROR; }
+      int ret = proc_kill(pid);
+      if (ret) { printf("Error %d killing pid=%d\n", ret, pid); goto ERROR; }
+      page = okpage; memmode = MHD_RESPMEM_MUST_COPY;
+    }
+    else {
+      ERROR:
+      errpage = "{\"status\": \"err\", \"msg\": \"Error killing process\"}";
+      page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // goto CHECKPAGE;
+    }
+  }
   else {
     response = trystatic(url);
     // "Overwriting previous write to \"ret\" with value from \"MHD_queue_response(connection, 200U, response)\".
@@ -462,19 +495,20 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   if (!page) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; }
   // memmode should be in MHD_RESPMEM_PERSISTENT, MHD_RESPMEM_MUST_COPY, MHD_RESPMEM_MUST_FREE
   response = MHD_create_response_from_buffer (strlen(page), (void*) page, memmode);
-  int ok = 0;
+  
   ok = MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
   // Allow cross-domain ref (example from docker headers setup w. daemon cl opts --api-cors-header *)
   
   ok = MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
   ok = MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
   ok = MHD_add_response_header (response, "Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
-  
+  ok = MHD_add_response_header (response, "Cache-Control", "no-store");
+  if (!ok) { httpcode = 203;}
   // MHD_add_response_header (response, "Content-Type", "");
   //  return request; }
   
   QUEUE_REQUEST:
-  ret = MHD_queue_response (connection, MHD_HTTP_OK, response);
+  ret = MHD_queue_response (connection, httpcode, response);
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
   
   if (response) { MHD_destroy_response(response); } // Model ?
@@ -519,6 +553,7 @@ void daemon_prep() {
   printf("daemon_prep(): Closed files (>=3), Turn output off 1,2\n");
   //return;
   int fd1 = open("/dev/null", O_RDWR);
+  if (fd1 < 0) { return; }
   //dup2(fd1, 0); // Extra trial. if this is dup2()d, There's immediate exit !
   dup2(fd1, 1);
   dup2(fd1, 2);

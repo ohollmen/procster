@@ -22,6 +22,7 @@ json_t * proc_to_json(proc_t * proc, char * cmdline);
 json_t * ptree_json(proc_t * p, int lvl);
 json_t * proc_list_json2(int flags);
 void ptree_free(proc_t * p, int lvl);
+int proc_kill(int pid);
 
 typedef struct pstree {
   GHashTable * idx; // Index for fast lookup
