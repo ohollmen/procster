@@ -1,29 +1,42 @@
-/**
+/** @file
+* Initial prototyping functions to create JSON process listings
+* - Create raw/rudimentatry JSON by sprintf() to string using shortest processing path
+* - Create ("populate") JSON (AoO) data structure using jansson library.
+*
+* Includes a small CLI testbench for testing output (to stdout).
 * 
-* Depends on (Ubuntu/Debian) libpropcs-dev
-* g++ -o proctest proctest.c -lprocps
-* gcc -o proctest proctest.c -lprocps
-* Running
-* ./proctest > procs.json
+* # Installing Dependencies
+* ... on (Ubuntu/Debian):
+*
+*     sudo apt-get install libpropcs-dev g++ -o proctest proctest.c -lprocps \
+*       gcc -o proctest proctest.c -lprocps
+*
+* ## Running
 * 
-* See proc_t structure def in proc/readproc.h (/usr/include/proc/readproc.h)
+* Store process list to a file:
+* 
+*     ./proctest list > procs.json
+* 
+* See `proc_t` structure def in `proc/readproc.h` (/usr/include/proc/readproc.h):
 * ```
 * find /usr/include/ -name readproc.h | xargs -n 1 less -N
 * # Very likely the /usr/include/proc/readproc.h
 * ```
-
-* # Testing
-* ./proctest | python -m json.tool
 * 
-* # Naming of process members in JSON
+* ## Testing
+* Validate JSON output:
+* ```
+* ./proctest list | python -m json.tool
+* ```
+* ## Naming of process members in JSON
 * 
 * Naming comes from
 * - readproc.h (struct proc_t)
 * - NPM process-list
-* # Alternatives to printf-JSON
 *
-* General: https://stackoverflow.com/questions/6673936/parsing-json-using-c
-
+* ## Alternatives to printf-JSON
+*
+* - General: https://stackoverflow.com/questions/6673936/parsing-json-using-c
 * - libjson-c3 (json-c) - Github https://github.com/json-c/json-c, APT: libjson-c3 and libjson-c-dev
 * - libfastjson4 - fork of json-c (APT: libfastjson4, libfastjson-dev)
 * - libjansson4 libjansson-dev
@@ -32,7 +45,7 @@
 * - nxJSON - https://bitbucket.org/yarosla/nxjson (Uses in-place strings)
 * - Frozen - https://github.com/cesanta/frozen (Sergey Lyubka)
 *
-* # Info / References
+* ## Info / References
 *
 * - https://stackoverflow.com/questions/49437192/libprocps-readproc-stack-smashing
 * - https://stackoverflow.com/questions/939778/linux-api-to-list-running-processes
@@ -42,9 +55,13 @@
 * - man wait, main waitpid, man openproc, man readproc
 * - https://gitlab.com/procps-ng/procps
 * 
-* # Notes on ps STIME and procps start_time
-* https://gitlab.com/procps-ng/procps/-/blob/master/ps/output.c
-* Possibly do: time_t t = getbtime() + pp->start_time / Hertz;
+* ## Notes on ps STIME and procps start_time
+* 
+* See https://gitlab.com/procps-ng/procps/-/blob/master/ps/output.c
+* Possibly do:
+* 
+*     time_t t = getbtime() + pp->start_time / Hertz;
+* 
 */
 #include <stdio.h>
 #include <stdlib.h>
@@ -79,7 +96,7 @@ CONSIDER: PROC_UID (Creates empty list) PROC_FILLUSR
 // int flags_def = PROC_FILLMEM | PROC_FILLCOM | PROC_FILLUSR | PROC_FILLSTATUS | PROC_FILLSTAT; // PROC_UID
 
 /** Create a process list directly from readproc() listing as JSON.
-* For flags see FLAGS in man openproc.
+* For flags see FLAGS in `man openproc`.
 * @param flags The openproc() flags that define the extent of parsing process
 * info from /proc/$PID (There are ~ 20 flags available).
 * @return Dynamically allocated process listing JSON string or NULL in case of errors (error messages get written to stderr).
@@ -119,7 +136,9 @@ char * proc_list_json(int flags) {
     // See the need to realloc()
     if ((jlen - jpos) < 10) {
       int jlen2 = 2*jlen;
-      jsonstr = realloc(jsonstr, jlen2);
+      char * jsonstr2 = realloc(jsonstr, jlen2);
+      if (!jsonstr2) { free(jsonstr); return NULL; }
+      jsonstr = jsonstr2;
       fprintf(stderr, "Triggered realloc(): %lu\n", (unsigned long)jsonstr);
       jlen = jlen2;
     } // (jpos / jlen) > 0.95
