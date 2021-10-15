@@ -1,28 +1,35 @@
-/**
- * Install libprocps6 libprocps-dev libglib2.0-dev libjansson4 libjansson-dev
+/** @file
+ * Transform a linear process list into a process tree.
+ *
+ * ## Dependencies
+ * On Ubuntu / Debian:
  * 
- * # Glib and jansson
+ *     sudo apt-get install libprocps6 libprocps-dev libglib2.0-dev libjansson4 libjansson-dev
  * 
- * https://stackoverflow.com/questions/42295821/using-int-as-key-in-g-hash-table
- * https://stackoverflow.com/questions/16868077/glib-hash-table-lookup-failure
- * https://developer.ibm.com/tutorials/l-glib/
- * https://jansson.readthedocs.io/en/2.8/conformance.html
+ * ## Glib and jansson references
+ * 
+ * - https://stackoverflow.com/questions/42295821/using-int-as-key-in-g-hash-table
+ * - https://stackoverflow.com/questions/16868077/glib-hash-table-lookup-failure
+ * - https://developer.ibm.com/tutorials/l-glib/
+ * - https://jansson.readthedocs.io/en/2.8/conformance.html
  * - https://stackoverflow.com/questions/50226252/what-is-the-proper-way-of-free-memory-in-creating-json-request-from-jansson-liba
  * - https://stackoverflow.com/questions/37018004/json-decref-not-freeing-memory
  * - https://groups.google.com/g/jansson-users/c/xD8QLQF3ex8 - jansson author Petri Lehtinen discussing
  *   building and easy to free (autofree) jansson data structure by using ..._new() versions of functions.
- *
- * gcc `pkg-config --cflags glib-2.0` foo.c `pkg-config --libs glib-2.0`
- * gcc foo.c `pkg-config --cflags --libs glib-2.0`
+ * 
+ * ## Compiling
+ * 
+ *     gcc `pkg-config --cflags glib-2.0` foo.c `pkg-config --libs glib-2.0`
+ *     gcc foo.c `pkg-config --cflags --libs glib-2.0`
  * 
  * 
- * gcc -o proc proc.c -I/usr/include/glib-2.0 -lprocps  `pkg-config --cflags --libs glib-2.0`
+ *     gcc -o proc proc.c -I/usr/include/glib-2.0 -lprocps  `pkg-config --cflags --libs glib-2.0`
  * 
  * Special flags for passing extras to openproc()
  * - PROC_PID - Pass an array of PIDS (0-terminated piudlist) as 2nd arg (pid_t* pidlist)
  * - PROC_UID - Pass (after PID:s) many UID:s followed by number of them.
  * 
- * # See struct proc_t
+ * ## See struct proc_t
  * 
  * less /usr/include/proc/readproc.h
  * Notes on start_time:
@@ -74,7 +81,7 @@ void val_free(void * v) {
 
 /** Populate a tree of (proc_t) processes.
 * Because of intricate linkages of process tree - and not wanting them
-* broken or incomplete, we do not support partial filtered process trees
+* broken or incomplete - we do not support partial or filtered process trees
 * (although the implementation contains some bulletproofing for this).
 * 
 * @return Root process node of the tree.

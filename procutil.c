@@ -1,6 +1,6 @@
 /**
 * @file
-* # Misc Process utilities (not related to process lists or trees).
+* Misc Process utilities (not related to process lists or trees).
 * 
 */
 #include <stdio.h>
