@@ -48,10 +48,11 @@ sudo apt-get install -y libglib2.0-dev
 sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
 ```
 For static linking you may additionally need:
-
+```
 sudo apt-get install -y libc6-dev libgnutls28-dev libpcre3-dev zlib1g-dev libsystemd-dev libp11-dev libidn2-dev libunistring-dev
 libtasn1-6-dev nettle-dev libgmp-dev liblzma-dev liblz4-dev libgcrypt20-dev
 libffi-dev libgpg-error-dev
+```
 
 ... or Centos/RH (7.6):
 ```
