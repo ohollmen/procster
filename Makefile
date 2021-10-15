@@ -3,6 +3,7 @@
 # Use -g here for debugging, also good to have -Wall
 CC=gcc -O2 -std=c99 -D_POSIX_C_SOURCE=200809
 LIBS=-lmicrohttpd -lprocps -ljansson
+LIBS_STATIC=
 # For Ulfius apps /usr/include/ulfius.h
 # -I$(EXAMPLE_INCLUDE)
 CFLAGS+=-c -Wall -I$(ULFIUS_INCLUDE)  -D_REENTRANT $(ADDITIONALFLAGS) $(CPPFLAGS)
@@ -35,6 +36,9 @@ main:
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
 	$(CC) -o procserver$(EXESUFF) procserver.o proclist.o procutil.o proctree.o $(LIBS) `pkg-config --libs glib-2.0`
 	echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
+static:
+	# See, README.md, Order accurately !
+	$(CC) -static $(LIBS_STATIC) $(LIBS)
 objclean:
 	rm -f proclist.o proctree.o procutil.o proclist_main.o procserver.o
 	#rm -f  *.o
