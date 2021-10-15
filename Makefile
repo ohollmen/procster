@@ -67,4 +67,6 @@ covmodel:
 	# -I/usr/include/glib-2.0/ $(GLIB_CFLAGS)
 	gcc -c conf/covmodels.c `pkg-config --cflags glib-2.0`
 	echo "Test Compiled Model"
-	
+# Relies on presence of "cppcheck"
+cppcheck:
+	cppcheck -i json_example.c -i ulftest.c .
