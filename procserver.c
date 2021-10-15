@@ -1,4 +1,8 @@
-/**
+/** @file
+* Process server (main()) 
+*
+* # Compiling
+* 
 * gcc -o procserver procserver.c -lmicrohttpd
 * 
 * # Info on MHD development
@@ -66,6 +70,12 @@
 enum ConnectionType {GET = 0,POST = 1};
 enum ParsingState {INITED =0, PARSING, COMPLETE};
 typedef struct connection_info_struct CONNINFO;
+/** MHD connection/request Helper data structure for maintaining the "state"
+* of request data reading / parsing (as data is read in chunks) for HTTP methods
+* that have a HTTP Body (POST, PUT).
+* The state is maintained across multiple calls to MHD "answer_to_connection"
+* (response handler) callback function. The last call 
+*/
 struct connection_info_struct {
   // enum ConnectionType connectiontype;
   // struct MHD_PostProcessor *postprocessor;
@@ -139,14 +149,16 @@ void con_info_destroy(CONNINFO *con_info) {
 }
 /** Allocate CONNINFO for POST Parsing.
  * CONNINFO is used to keep track of body retrieval / buffering state across multiple calls
- * to 
+ * to MHD answer_to_connection() request handler callback.
+ * @param connection - MHD connection / request struct
+ * @return App specific HTTP Request object (BODY data reading state mgr)
  */
 CONNINFO *con_info_create(struct MHD_Connection *connection) {
   const char * ct   = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-type");
   const char * clen = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-length");
   fprintf(stderr, "create(): CT: %s, CLEN: %s\n", ct, clen);
   
-  int initsize = 128; // Content buffer con_info.postdata
+  int initsize = 128; // Content buffer con_info.postdata. CANNOT be fixed
   
   // Mark content-type and content-length to con_info
   CONNINFO * con_info = (CONNINFO *)calloc (1, sizeof (CONNINFO));
@@ -214,7 +226,7 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
       con_info->size = newsize;
 
     }
-    // Receive the post data and write them into the bufffer (new: binary append)
+    // Receive the post data and write them into the buffer (new: binary append)
     // strncat(con_info->postdata, upload_data, cnt); // string(upload_data, *upload_data_size); // OLD (for text content only)
     memcpy(con_info->postdata + con_info->used, upload_data, cnt); // Tolerates binary and does not need to find end.
     con_info->used += cnt;
@@ -247,7 +259,9 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
 #define parse_running(c)  ((*con_cls) && (c->is_parsing == 1))
 // Usage: parse_ending(c) . TODO: consider if we should stick with setting state (2) inside POST parser (NOT macro)
 #define parse_ending(c)   ((*con_cls) && (!*upload_data_size) && (c->is_parsing) && (c->is_parsing = 2)) // COMPLETE
-/** MHD POST Handler example. Echoes back the request content (w/o parsing it in between). */
+/** MHD POST Handler example.
+ * Echoes back the request content (w/o parsing it in between).
+ */
 int answer_to_connection (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
@@ -276,7 +290,7 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   return ret;
 }
 
-/** Generic POST Handler with POST Body parsing.
+/** Legacy: Generic POST Handler with POST Body parsing.
 * See: MHD_post_process and MHD_create_post_processor
 * MHD_ContentReaderFreeCallback
 * MHD_RequestCompletedCallback set by  MHD_OPTION_NOTIFY_COMPLETED (2 pointer params)
@@ -414,7 +428,7 @@ int pid_extract(const char * url) {
   if (i) { pid = atoi(&(url[i+1])); }
   return pid;
 }
-/** Create OS Process listing.
+/** MHD Response handler for creating OS Process listing.
 * Example of simple GET handling of HTTP Request.
 */
 int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
