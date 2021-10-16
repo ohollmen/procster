@@ -2,8 +2,14 @@
 # For kill() and strdup() we must use _POSIX_C_SOURCE
 # Use -g here for debugging, also good to have -Wall
 CC=gcc -O2 -std=c99 -D_POSIX_C_SOURCE=200809
-LIBS=-lmicrohttpd -lprocps -ljansson
-LIBS_STATIC=
+LIBS=-lmicrohttpd -lprocps -ljansson -lgnutls
+# NOTE: p11_kit* syms are found in libp11-kit.so, but not /usr/lib/x86_64-linux-gnu/libp11.a
+# (Has  pkcs11_* syms). https://githubmemory.com/repo/p11-glue/p11-kit/issues/355
+# Seems -lp11 and -lsystemd (sd_* syms) need to be retained dyn. linked. And -lc
+# Seems cannot mix static libpthread and dynamic libc, so take out libpthread too
+LIBS_STATIC=-lglib-2.0     -lz -lnettle -lhogweed -ltasn1      -lgmp -lidn2 -lunistring -lffi
+# `pkg-config --libs glib-2.0`
+
 # For Ulfius apps /usr/include/ulfius.h
 # -I$(EXAMPLE_INCLUDE)
 CFLAGS+=-c -Wall -I$(ULFIUS_INCLUDE)  -D_REENTRANT $(ADDITIONALFLAGS) $(CPPFLAGS)
@@ -38,7 +44,11 @@ main:
 	echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
 static:
 	# See, README.md, Order accurately !
-	$(CC) -static $(LIBS_STATIC) $(LIBS)
+	#WRONG: $(CC) -static -o procserver_static $(LIBS_STATIC) $(LIBS) procserver.o proclist.o procutil.o proctree.o
+	# Assume low-to-high from right to left (lower on right)
+	# Note: hogweed has nettle symbols
+	# -static (full) / -Wl,-Bstatic (for partial)
+	$(CC) -Wl,-Bstatic -o procserver_static procserver.o proclist.o procutil.o proctree.o  $(LIBS) $(LIBS_STATIC) -Wl,-Bdynamic -lp11-kit -lp11 -lsystemd  -lpthread
 objclean:
 	rm -f proclist.o proctree.o procutil.o proclist_main.o procserver.o
 	#rm -f  *.o
