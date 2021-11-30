@@ -7,7 +7,7 @@
 * 
 * # Info on MHD development
 * 
-* - Google microhttpd examples
+* - Google: microhttpd examples
 * - see (in Debian/Ubuntu) /usr/share/doc/libmicrohttpd-dev/examples/.
 * - Response from file:
 *     - //response = MHD_create_response_from_fd_at_offset64 (sbuf.st_size, fd, 0);
@@ -20,7 +20,7 @@
 * 
 * # Info on Ulfius
 * 
-* - See also libulfius in Ubuntu: apt-get libulfius2.2
+* - See also libulfius in Ubuntu: apt-get libulfius2.2 (Note 2.2)
 * - https://github.com/babelouest/ulfius
 *
 * # TODO
@@ -74,7 +74,11 @@ typedef struct connection_info_struct CONNINFO;
 * of request data reading / parsing (as data is read in chunks) for HTTP methods
 * that have a HTTP Body (POST, PUT).
 * The state is maintained across multiple calls to MHD "answer_to_connection"
-* (response handler) callback function. The last call 
+* (response handler) callback function. The last call to "answer_to_connection"
+* will let response to be created.
+* The reference implementation of this flow is in function named answer_to_connection
+* in this file and will utilize post_body_parse as workhorse of parsing / assembling
+* the POST body (into connection_info_struct, member postdata).
 */
 struct connection_info_struct {
   // enum ConnectionType connectiontype;
@@ -84,7 +88,7 @@ struct connection_info_struct {
   // int answercode;
   int debug;
   int is_parsing; /**< State of parsing (INITED =0, PARSING, COMPLETE) */
-  int contlen;    /**< Currently stored content length */
+  int contlen;    /**< Currently stored content length / length gotten from "Content-length" */
   char * conttype; /**< Content type */
   char * postdata; /**< Body Content */
   int size;
@@ -116,6 +120,8 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 
 /** Generic string content sending.
 * @param connection MHD_Connection / single request (See MHD Docs)
+* @param page - Page as (null terminated) text
+* @param status_code - HTTP numeirc status code (e.g. 200, 400. ...) to send with response
 * @return Return the kind of values that MHD request handler returns (MHD_NO, ...).
 * @todo Add len for binary data (allow -1 to measure string)
 */
@@ -158,7 +164,7 @@ CONNINFO *con_info_create(struct MHD_Connection *connection) {
   const char * clen = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-length");
   fprintf(stderr, "create(): CT: %s, CLEN: %s\n", ct, clen);
   
-  int initsize = 128; // Content buffer con_info.postdata. CANNOT be fixed
+  int initsize = 128; // Content buffer for con_info.postdata. CANNOT be fixed size)
   
   // Mark content-type and content-length to con_info
   CONNINFO * con_info = (CONNINFO *)calloc (1, sizeof (CONNINFO));
@@ -183,10 +189,15 @@ CONNINFO *con_info_create(struct MHD_Connection *connection) {
 /** Parse POST Body incrementally.
 * This gets called multiple times as a result of MHD answer_to_connection() being called multiple times with request types
 * that have HTTP Body present.
+* 
 * The state of request processing and body parsing is reflected in con_info.state in follwing ways:
-* - INITED (0) con_info has been allocated and returned via param list con_cls
-* - PARSING (1) the fragments being passed by calls to answer_to_connection() are being parsed.
-* - COMPLETE (2) when body parsing has been completed.
+* - INITED (0) - con_info has been allocated and returned via param list con_cls
+* - PARSING (1) - the fragments being passed by calls to answer_to_connection() are being parsed.
+* - COMPLETE (2) - when body parsing has been completed, all POST content stored.
+* @param connection - MHD Connection
+* @param upload_data - Incoming POST data fragment (to add to collected POST data)
+* @param upload_data_size - Size of new fragment
+* @param con_cls - MHD Request specific user-data, Here: CONNINFO *
 * @return MHD_NO for fatal errors that should terminate whole HTTP request, MHD_YES for valid state and progression of parsing.
 * A typical usage within answer_to_connection() might look like this:
      ...
@@ -195,7 +206,7 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
   if (!connection) { return MHD_NO; }
   
   CONNINFO * con_info = NULL;
-  con_info = *con_cls;
+  con_info = *con_cls; // Grab con_info from HMD-conventional void **
   // Enable following if-else blocks to keep more of the parsing state handling here (instead of macros)
   /*
   // Establishing con_cls (last param of request handler (answer_to_connection()))
@@ -213,13 +224,13 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
   // 
   if (!con_info) { return MHD_NO; } // Should always have con_info by now
   
-  // New chunk coming
+  // New chunk coming (could be INITED,PARSING)
   if (*upload_data_size) {
     int cnt = *upload_data_size;
     int need = con_info_need_mem(con_info, cnt); // (con_info->used + cnt + 1);
     if (need > con_info->size) { // Fixed (off-by-one) >= to > to not realloc unnecessarily
       int newsize = 2*con_info->size; // Advisory, 2X may not be enough (Need: MAX(newsize, need))
-      if (need > newsize) { newsize = need; }
+      if (need > newsize) { newsize = need; } // Fix to match needed size (if advice is smaller)
       con_info->postdata = (char*)realloc(con_info->postdata, newsize);
       if (!con_info->postdata) { return MHD_NO; }
       con_info->debug && fprintf(stderr, "Realloc from %d to: %d\n", con_info->size, newsize);
@@ -238,6 +249,8 @@ int post_body_parse(struct MHD_Connection *connection, const char *upload_data, 
     con_info->debug && fprintf(stderr, "Got POST Body:\n%s\n", con_info->postdata);
     // *con_cls = NULL; // Mark/flag "Done" ? Set outside because there's no access to con_info w/o *con_cls !
     con_info->is_parsing = 2;
+    // Mark length for case contlen == 0 (contlen not gotten from headers) ?
+    //if (!con_info->contlen) { con_info->contlen = con_info->used; } // ->size ?
   }
   
   return MHD_YES; // 1;
@@ -271,6 +284,7 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   printf("URL(%s): %s Datasize: %lu, con_cls: %p\n", method, url, *upload_data_size, *con_cls);
   
   CONNINFO * con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
+  // Checks that we have con_info
   if (parse_no_state(con_info)) { return MHD_NO; } // 0 con_info_create() failed ?
   /* */
   if (parse_starting(con_info)) { return MHD_YES; } // 1 
@@ -279,7 +293,8 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   if (parse_running(con_info))  { return MHD_YES; }
   /* coverity[assign_where_compare_meant] */
   parse_ending(con_info);
-  ////////// Send the response the most ordinary way /////////////
+  ////////// Handle Request: Send the request content as response content /////////////
+  // TODO: Should get handler from  app level (cls) or request level (con_cls). Haldler should be set earlier by ... (?)
   struct MHD_Response *
     response = MHD_create_response_from_buffer(strlen(con_info->postdata), (void*)con_info->postdata, MHD_RESPMEM_MUST_COPY);
   if (con_info) { con_info_destroy(con_info); } // Must free !
