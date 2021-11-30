@@ -63,7 +63,7 @@ int proc_kill(int pid) {
   return 0;
 }
 /** Convert / Format p->start_time into human readable ISO time.
-* @param p - Process
+* @param p - Process Object
 * @param tbuf - String buffer for ISO time
 * @param size - Size for tbuf (will be forwarded to strftime())
 * @param fix - N/A (yet), pass 0 (TODO: Fix start_time to reflect EPOC time)
@@ -95,15 +95,16 @@ int gsleader(proc_t * p) {
 }
 
 /** Create approximate cmdline string out of char ** cmdline.
-* Approximate means no quoting or escaping is done to turn char ** items
-* back into *real* runnable properly formatted  commandline string.
-* Approximate is good enough for this process listing usage.
-* 
-* @param list - Array of Strings
-* @param buf - String buffer where Array items are serialized space-separated (must contain enough space for )
-* @return true/1 for serialization being done, 0 for list being NUlL (no serialization *can* be done).
-* @todo Pass buffer size
-*/
+ * Approximate means no quoting or escaping is done to turn char ** items
+ * back into *real* runnable properly formatted  commandline string.
+ * Approximate is good enough for this process listing usage.
+ * 
+ * @param list - Array of Strings
+ * @param buf - String buffer where Array items are serialized space-separated (must contain enough space for string output)
+ * @param size - Size of buf (in bytes)
+ * @return true/1 for serialization being done, 0 for list being NULL (no serialization *can* be done).
+ * @todo Pass buffer size
+ */
 int list2str(char ** list, char buf[], int size) {
   int pos = 0;
   int len = 0;
@@ -129,7 +130,7 @@ int list2str(char ** list, char buf[], int size) {
 /** Populate Process node into (Jansson) JSON Object.
  * Can be used to populate processes in linear list or tree formats.
  * @param proc - Process
- * @param cmdline - Buffer to serialize (apprximate) command line with arguments into.
+ * @param cmdline - Buffer to serialize (approximate) command line with arguments into.
  * @todo See https://groups.google.com/g/jansson-users/c/xD8QLQF3ex8 and the need to use json_object_set_new()
  */
 json_t * proc_to_json(proc_t * proc, char * cmdline) {
