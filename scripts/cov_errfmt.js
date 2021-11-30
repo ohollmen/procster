@@ -1,20 +1,36 @@
 #!/usr/bin/node
-/** Note: Files must be in sync with files at the time or Cov run.
+/** Report Coverity errors in coverity errors JSON file (produced with cov-format-errors ...)
+* in Markdown format.
+* # Usage
+* 
+* Pass coverity errors (JSON) file as first command line argument.
+* ```
+* node cov_errfmt.js cov_errors_v8.json
+* ```
+* 
+* # Source Code Files
+* 
+* If you have the source code present, the utility is able to cross reference the source
+* code and show it in the report. Set env variable SRC_PRESENT=1 to have utility look up
+* the source files.
+* Note: Source code presnt in current dir must be in sync with files at the time or Cov run.
+
 */
 //var webview = require("./jsx/webview.js");
 var fs = require("fs");
 var path = require('path');
 
-if (!process.argv[2]) { console.error("Need filename"); process.exit(1);}
-
-// var fn = "./errors.json";
+if (!process.argv[2]) { console.error("Need filename of Cov. JSON error report !"); process.exit(1);}
+// Have source code present ? TODO: Allow passing from CLI
+var havesrc = process.env["SRC_PRESENT"];
 var fn = process.argv[2];
 fn = path.resolve(fn);
 var err_rpt = require(fn);
 
 var errs = err_rpt.issues;
 if (!Array.isArray(errs)) { throw "Errors not in array !"; }
-var fcache = {};
+var fcache = {}; // File Cache (See fcache_add())
+
 
 function report_md(errs) {
 var cont = "# Coverity issues v."+err_rpt.formatVersion+"\n\n";
@@ -29,13 +45,15 @@ errs.forEach((re) => {
   var func = re.functionDisplayName; // Can be null (!)
   var evs = re.events;
   if (!evs) { throw "No events for defect"; }
-  var err = fcache_add(fname);
-  
-  if (err) { console.log("Err: "+err+ " caching "+fname+""); process.exit(1); }
-  var line = fcache[fname][lnum-1]; // Adjust to idx
+  var line;
+  if (havesrc) {
+    var err = fcache_add(fname);
+    if (err) { console.log("Err: "+err+ " caching "+fname+""); return undefined; }
+    line = fcache[fname][lnum-1]; // Adjust to idx
+  }
   cont += "- "+ckr+" - File: "+fname+", func: "+func+"\n";
   //cont += "   - top-evs:"+evs.length+"\n";
-  cont += "   - Line #"+lnum+": \""+line+"\"\n";
+  if (havesrc) { cont += "   - Line #"+lnum+": \""+line+"\"\n"; }
   
   var opts = {nameattr: "pid", idattr: "pid", licb: licb, liclX: "", debug: 0};
   // Events (TODO: Use ...):
@@ -50,7 +68,7 @@ errs.forEach((re) => {
     var evtag = iev.eventTag;
     // Min. 4 sp. (+2 att each leve > 0)
     var pad = "".padEnd(4+lvl*2);
-    cont += "    "+pad+"- "+i +" "+fname+", l."+lnum+": "+desc+" ("+evtag+")\n"
+    cont += "    "+pad+"- "+i +" "+fname+", l."+lnum+": "+desc+" ("+evtag+")\n";
     //OLD: cont += "      - EvTag:"+evtag+"\n";
     if (iev.events) { showevs(iev.events, lvl+1); }
   });
@@ -62,12 +80,18 @@ errs.forEach((re) => {
   }
   return cont;
 }
+
 var cont = report_md(errs);
 console.log(cont);
 
+/** Cache file into in-mem pool of files as same file may be (is usually) referred to
+* many times from the error report.
+*/
 function fcache_add(fname) {
   if (fcache[fname]) { return 0; } // Don't redo
+  // try {
   var data = fs.readFileSync(fname, 'utf8');
+  // } catch (ex) { console.error("No file '"+fname+"' present"); }
   if (!data) { return 1; }
   fcache[fname] = data.split(/\n/);
   if (!fcache[fname].length) { return 2; }
