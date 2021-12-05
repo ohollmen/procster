@@ -1,0 +1,5 @@
+<map id="action" name="action">
+<area shape="rect" id="node2" href="$structrequest.html" title="request" alt="" coords="114,184,179,211"/>
+<area shape="rect" id="node3" href="$structresponse.html" title="response" alt="" coords="45,95,120,121"/>
+<area shape="rect" id="node4" href="$structminiserver.html" title="miniserver" alt="" coords="217,95,300,121"/>
+</map>

@@ -1,8 +1,0 @@
-# Restart Procster
-- name: Restart Procster
-  become: yes
-  hosts: '{{ host }}'
-  tasks:
-    - name: Start/Restart Service
-      shell: 'systemctl restart procster'
-
