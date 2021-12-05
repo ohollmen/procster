@@ -14,3 +14,5 @@ old
 index.html
 jsx
 package-lock.json
+# Must be generated for the host
+procster.service

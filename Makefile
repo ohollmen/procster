@@ -64,7 +64,7 @@ ulf:
 	# $(LIBS)  -lorcania
 	$(CC) -o ulftest ulftest.o -lc -lulfius
 docs:
-	-@mkdir doxydocs
+	-@mkdir -p doxydocs
 	doxygen .doxygen.conf
 miniserver:
 	$(CC) -c miniserver.c `pkg-config --cflags glib-2.0`
