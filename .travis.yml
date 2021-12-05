@@ -15,7 +15,7 @@ branches:
 #  except:
 #    - gh-pages
   only:
-    - master
+    - main
 
 # Environment variables
 # Any *repo* specific settings need to filled via Web GUI !!!
