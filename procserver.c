@@ -625,9 +625,9 @@ void daemon_launch(int port, json_t * json) {
   // '\n' triggers return (line-buffering).
   //(void) getchar ();
   //int c = getchar();
-  //int c;
+  int c;
   // 
-  while (int c = getchar()) {
+  while (c = getchar()) {
     if (c == 255) { break; }
   }
   fprintf(fh, "Stopping Daemon (getchar=%d, ok=%d)\n", c, ok);
