@@ -1,0 +1,112 @@
+# This will run on Travis' 'new' container-based infrastructure
+# Note: Example stub gotten from:
+# https://gist.github.com/vidavidorra/548ffbcdae99d752da02
+# ... Includes 1) gh-pages branch creation, 2) example script
+# and 3) travis.yml example config
+# dist: xenial # bionic = 18.04
+# language: C
+sudo: false
+
+# Blacklist
+# Better might be: branches: ... only: ... -master
+branches:
+  except:
+    - gh-pages
+
+# Environment variables
+# Any *repo* specific settings need to filled via Web GUI !!!
+# Some other vars (implicitly set?): TRAVIS_BRANCH, TRAVIS_PULL_REQUEST
+env:
+  global:
+    # Name ?
+    - GH_REPO_NAME: https://github.com/ohollmen/procster.git
+    - DOXYFILE: $TRAVIS_BUILD_DIR/<path_to_your_doxygen_configuration_file>
+    - GH_REPO_REF: github.com/ohollmen/procster.git
+    # Seems this is just an example ? NOT. travis  encrypt --com actually
+    # Adds its output for input MYENVVAR=a_value to prop. "secure: "
+    #- secure: ''
+    # *This* is used by travis CI (???)
+    - GH_REPO_TOKEN: ''
+    # https://gist.github.com/francesco-romano/351a6ae457860c14ee7e907f2b0fc1a5
+    # User defined var (to only build docs)
+    #- TRAVIS_BUILD_DOCS: 0
+    # - secure: GS3c1enzv7X3nzgweceRT71fZhelGqikBxS5CE4CtrQmP64y+VGjpN4zAOftQcqqpDQeaHt7ZT9qcZ55b+ed5eYcL7K1OFTbI05/anlUDTT5PJVdOdyLqVqyuLV+k6Pw4ZKo088DbdrVYHJl63xCjwZ6gttTyJFplFXfT5NGTc9uwsyINFYJVIR+u8y3pbVv/sDSr9zQHn0dV+m0qGasm9zg3bBSisCDoRLcdDzLpgKTkwU/rS347E4jx5E3U3niaAAie4Qr6eOX4RcI/KNbJbh084HFbvUypU099AgqO8Bs7lC7e8t0ekG/MSDKhux2ny056FsIYGISqSTQSqmLeTHM0QSekf4UdZJDYXMNcNjbBYSLUpEL6OA5h+FjjB5nw7A2Ij+ViZmtqo3xc1AogAUkA92BYztUNo4tZXNQV6U6314sAumRnTzdeuUX/izPoiAiqfBM51Eu6f2Ktuup9Xf7dOysi4X7050ycneQTYe3Dl2y1wDSgRKfeD2D6SR9Zc5ASJ6ZKvR4dxQ2zOGEfG7WLo56wsTd6tlaX4/tUACyS5cf9J95NGz4GlKIXFP3btyAp95txEKoo0CuUKQ3aIZbF94aK7TNH6Vd+UT8pTJEhzs5797CPmg/Tm290Vt6qIYSb27SZ1660wTGNk5dkKFsFlwf5b71l5sZys0HJlU=
+  jobs:
+    - SOME_VAR=1
+# cache node_modules so travis doesn't reinstall them every time
+#cache:
+#  directories:
+#    - 'node_modules'
+before_install:
+  - sudo apt-get update
+#  - sudo apt-get -y install libxml2-dev
+# Installs by shell command (NOT addon).
+# Many times easier to copy from Install docs.
+install:
+  # E.g. - npm install ... / apt-get install
+  - sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
+  - sudo apt-get install -y libglib2.0-0 libglib2.0-dev
+  - sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
+# Install dependencies (with an APT addon).
+# Note: For Doxygen docs ONLY "build", addon:s do *not* need
+# to include build tools or dependency libs (headers debateable)
+
+addons:
+  aptX:
+    #update: true
+    packages:
+      #- doxygen
+      #- doxygen-doc
+      #- doxygen-latex
+      #- doxygen-gui
+      #- graphviz
+      # Need actual build dependencies ?
+      - libprocps6
+      - libprocps-dev
+      - libjansson4
+      - libjansson-dev
+      - libglib2.0-0
+      - libglib2.0-dev
+      - libmicrohttpd12
+      - libmicrohttpd-dev
+      ### Do not look like useful for build or runtime
+      # - libglib2.0-dev-bin
+      # - libglib2.0-bin
+
+# Prep Run before "script:"
+#before_script:
+#  - ...
+# Build your code (?) or docs e.g. by calling make
+# On most exaples this is docs generation !!!
+script:
+  - make
+  # Alt. (example, for docs only):
+  #- cd docs
+  #- doxygen collab.dox
+# Generate and deploy documentation.
+# Note: With Yaml syntax: "- >-\n" a complex shell snippet can be built.
+# Orig script on: ???
+#after_success:
+#  - cd $TRAVIS_BUILD_DIR
+#  - chmod +x generateDocumentationAndDeploy.sh
+#  - ./generateDocumentationAndDeploy.sh
+
+# From Comments of https://gist.github.com/vidavidorra/548ffbcdae99d752da02
+# User amadeubarbosa
+
+# Deploy using travis builtin GitHub Pages support
+# Seems $GITHUB_API_KEY is filled in Travis CI
+#deploy:
+#  provider: pages
+#  skip_cleanup: true
+#  #keep-history: false
+#  #target_branch: gh-pages # Do not use
+#  # Note: Also public_repo
+#  #repo: https://github.com/ohollmen/procster
+#  # local_dir should not need "$TRAVIS_BUILD_DIR/"
+#  local_dir: $TRAVIS_BUILD_DIR/doxydocs/html
+#  github_token: $GITHUB_API_KEY
+#  # github_token: $GITHUB_TOKEN
+#  # Trigger deploy on (push) events in branch
+#  on:
+#    branch: master
