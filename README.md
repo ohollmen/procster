@@ -43,7 +43,8 @@ Install dependencies (e.g) on Ubuntu 18.04:
 ```
 # For Processlister ... (procps 3.3.12, jansson 2.11)
 sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
-sudo apt-get install -y libglib2.0-dev
+# Glib runtime + ...-dev (headers)
+sudo apt-get install -y libglib2.0-0 libglib2.0-dev
 # For Microhttpd
 sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
 ```

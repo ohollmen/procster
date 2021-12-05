@@ -5,7 +5,8 @@
 # and 3) travis.yml example config
 # dist: xenial # bionic = 18.04
 dist: bionic
-# language: C
+language: c
+compiler: gcc
 sudo: false
 
 # Blacklist

@@ -606,6 +606,7 @@ void daemon_launch(int port, json_t * json) {
   int piderr = savepid(json);
   if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); }
   // apc - Accept Policy Callback
+  // TODO: Have this as config string (or array) member in JSON file (e.g. "mhdrunflags")
   // MHD_USE_TCP_FASTOPEN, MHD_USE_AUTO (poll mode), MHD_USE_DEBUG == MHD_USE_ERROR_LOG
   int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD; 
   mhd = MHD_start_daemon (flags, port, NULL, NULL,
@@ -624,8 +625,9 @@ void daemon_launch(int port, json_t * json) {
   // '\n' triggers return (line-buffering).
   //(void) getchar ();
   //int c = getchar();
-  int c;
-  while (c = getchar()) {
+  //int c;
+  // 
+  while (int c = getchar()) {
     if (c == 255) { break; }
   }
   fprintf(fh, "Stopping Daemon (getchar=%d, ok=%d)\n", c, ok);
