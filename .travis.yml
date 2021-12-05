@@ -4,14 +4,17 @@
 # ... Includes 1) gh-pages branch creation, 2) example script
 # and 3) travis.yml example config
 # dist: xenial # bionic = 18.04
+dist: bionic
 # language: C
 sudo: false
 
 # Blacklist
 # Better might be: branches: ... only: ... -master
 branches:
-  except:
-    - gh-pages
+#  except:
+#    - gh-pages
+  only:
+    - master
 
 # Environment variables
 # Any *repo* specific settings need to filled via Web GUI !!!
@@ -74,8 +77,8 @@ addons:
       # - libglib2.0-bin
 
 # Prep Run before "script:"
-#before_script:
-#  - ...
+before_script:
+  - echo Just Before Script
 # Build your code (?) or docs e.g. by calling make
 # On most exaples this is docs generation !!!
 script:
