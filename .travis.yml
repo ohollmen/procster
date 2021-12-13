@@ -1,5 +1,5 @@
 # This will run on Travis' 'new' container-based infrastructure
-# Note: Example stub gotten from:
+# Note: Example stub (for doc generation) gotten from:
 # https://gist.github.com/vidavidorra/548ffbcdae99d752da02
 # ... Includes 1) gh-pages branch creation, 2) example script
 # and 3) travis.yml example config
@@ -10,7 +10,7 @@ compiler: gcc
 sudo: false
 
 # Blacklist
-# Better might be: branches: ... only: ... -master
+# Better might be: branches: ... only: ... - master (or main)
 branches:
 #  except:
 #    - gh-pages
@@ -44,17 +44,16 @@ env:
 before_install:
   - sudo apt-get update
 #  - sudo apt-get -y install libxml2-dev
-# Installs by shell command (NOT addon).
+# (MP 1) Installs by shell command (NOT addon).
 # Many times easier to copy from Install docs.
 install:
   # E.g. - npm install ... / apt-get install
   - sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
   - sudo apt-get install -y libglib2.0-0 libglib2.0-dev
   - sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
-# Install dependencies (with an APT addon).
+# Install dependencies (with an APT addon). First to execute (even before inst.)
 # Note: For Doxygen docs ONLY "build", addon:s do *not* need
 # to include build tools or dependency libs (headers debateable)
-
 addons:
   aptX:
     #update: true
@@ -80,13 +79,15 @@ addons:
 # Prep Run before "script:"
 before_script:
   - echo Just Before Script
-# Build your code (?) or docs e.g. by calling make
-# On most exaples this is docs generation !!!
+# (MP2) Build your code (?) or docs e.g. by calling make
+# On most examples this is docs generation !!!
 script:
   - make
   # Alt. (example, for docs only):
   #- cd docs
   #- doxygen collab.dox
+#after_script:
+#  - echo "After Script, always run"
 # Generate and deploy documentation.
 # Note: With Yaml syntax: "- >-\n" a complex shell snippet can be built.
 # Orig script on: ???
@@ -94,10 +95,14 @@ script:
 #  - cd $TRAVIS_BUILD_DIR
 #  - chmod +x generateDocumentationAndDeploy.sh
 #  - ./generateDocumentationAndDeploy.sh
-
+#after_failure:
+#  - echo Only After failure
 # From Comments of https://gist.github.com/vidavidorra/548ffbcdae99d752da02
 # User amadeubarbosa
 
+
+#before_deploy:
+#  - echo Before Deploy ...
 # Deploy using travis builtin GitHub Pages support
 # Seems $GITHUB_API_KEY is filled in Travis CI
 #deploy:
@@ -114,3 +119,9 @@ script:
 #  # Trigger deploy on (push) events in branch
 #  on:
 #    branch: master
+#after_deploy:
+#  - After Deploy ...
+# Somewhat counter-intuitively after_script: ops get called after all *deploy
+# events.
+#after_script:
+#  - After Script
