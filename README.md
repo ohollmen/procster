@@ -132,3 +132,7 @@ preferably add /usr/local/lib to /etc/ld.so.conf and run ldconfig). You should a
 causing ambiguity with newly installed headers from (gitlab) source package (causing wrong structure offsets,
 wrong function signatures, etc.).
 
+## Code Documentation (by Doxygen)
+
+Doxygen extracted code documentation is available at [ohollmen.github.io/procster](https://ohollmen.github.io/procster/).
+
