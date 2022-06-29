@@ -3,20 +3,36 @@
 Procster is a simple microhttpd based HTTP service that lists
 processes via a REST/JSON Web API.
 
+Procster service can:
+
+- List processes as (JSON) linear listing (like ps utility)
+- List processes in (JSON) tree format (like pstree utility)
+- Kill processes by process id (PID)
+
 Procster is meant to serve you in a toolkit / API manner, so that
 you merely tap on to it with your favorite HTTP client and decide what
-you do with data.
+you do with the data. The processes can be queried with tools like
+curl/libcurl, python requests, Node.js fetch or Axios, etc.
+
+If you manage a cluster of servers, you can run Procster on each of the hosts
+to be able to query and manage processes on the whole cluster.
+
+Procster also has a command line process lister that outputs processes in JSON
+to stdout (Other than that is works pretty much like `ps` utility, except shows more
+process properties than `ps` by default.).
+
 <!--, but Procster also ships with a small test-nature Web
 GUI to graphically get hang of what data Procsster can provide.
 -->
 
-## Procster Design Rationale
+## Procster Design
 
-Procster is written on top of 4 main, reusable footings:
-- procps - Linux process lister API, also used by "ps" and "top" utilities
-- microhttpd - Lightweight, standalone HTTP server
-- glib - For helper data structures
-- libjansson - JSON library to parse and serialize JSON
+Procster is written on top of 4 reusable footings:
+
+- **procps** - Linux process lister API, also used by "ps" and "top" utilities
+- **libmicrohttpd** - Lightweight, standalone HTTP server
+- **glib** - For helper data structures
+- **libjansson** - JSON library to parse and serialize JSON
 
 Choosing a very slim "embedded" web server (Instead of general purpose
 web server like Apache or NginX) and efficient libraries for other tasks
@@ -125,10 +141,10 @@ cd procps
 make
 sudo make install
 ```
-This places include files and libraries under /usr/local/include/proc/ and /usr/local/lib respectively.
+This places include files and libraries under `/usr/local/include/proc/` and `/usr/local/lib` respectively.
 Because of the way includes are referred (from `/proc`) subdir, the respective -I and -L options would be
--I/usr/local/include/ -L/usr/local/lib (To testrun on Centos, you may need to add export LD_LIBRARY_PATH=/usr/local/lib or
-preferably add /usr/local/lib to /etc/ld.so.conf and run ldconfig). You should also uninstall procps-ng-devel from
+-I/usr/local/include/ -L/usr/local/lib (To testrun on Centos, you may need to add export `LD_LIBRARY_PATH=/usr/local/lib` or
+preferably add `/usr/local/lib` to `/etc/ld.so.conf` and run `ldconfig`). You should also uninstall procps-ng-devel from
 causing ambiguity with newly installed headers from (gitlab) source package (causing wrong structure offsets,
 wrong function signatures, etc.).
 
