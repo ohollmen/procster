@@ -6,7 +6,7 @@
 # - https://github.com/gliderlabs/docker-alpine/issues/24
 # - make: /bin/sh: Operation not permitted https://gitlab.alpinelinux.org/alpine/aports/-/issues/12396
 # TODO: Multi-stage build, separate *-dev and RT libs
-# NOTE: There seems to be problems with alpine:2.14 and make (make: /bin/sh: Operation not permitted)
+# NOTE: There seems to be problems with alpine:3.14 and make (make: /bin/sh: Operation not permitted). 3.13 Works (!?)
 # FROM alpine:3.14
 FROM alpine:3.13 AS build
 
@@ -23,10 +23,12 @@ RUN make
 # ENTRYPOINT ["/app/procster"]
 CMD bash
 
-# 2nd (install) stage
+# 2nd (install for app runtime) stage
 FROM alpine:3.13
 # RT Stuff *only*
-RUN apk update && apk add --no-cache procps jansson glib libmicrohttpd ca-certificates curl
+# Note "curl" used to be added for testing from inside container - now left out.
+# If needed - Just do ad-hoc install inside live container (after docker exec ...): apk add curl
+RUN apk update && apk add --no-cache procps jansson glib libmicrohttpd ca-certificates
 RUN mkdir /root/procster
 WORKDIR /root/procster
 # Copy from build image
