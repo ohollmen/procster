@@ -1,0 +1,10 @@
+*.o
+*.md
+*.pid
+*.yml
+*.service
+*.lock
+*.geany
+*.sh
+docker
+.git
