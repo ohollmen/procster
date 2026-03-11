@@ -1,5 +1,7 @@
 ---
 # yamllint .github/workflows/build.yml
+# Notes:
+# - Tests can be added as a step under build job (not a separate job)
 name: Build and Test Pipeline
 
 # 1. Trigger
@@ -12,19 +14,46 @@ on:
 jobs:
   build_job:
     runs-on: ubuntu-latest
+    env:
+      # FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+    # By defaul runs in a VM. Optional container ...
+    # container:
+    #  image: procster-build-image:latest
+    #  # In case stored in external registry
+    #  # (even ghcr.io/myorg/myrepo/myimg:latest):
+    #   credentials:
+    #     username: ${{ github.actor }}
+    #     password: ${{ secrets.GITHUB_TOKEN }}
+    #  # In case special privileges are needed
+    #  #options: --privileged
     steps:
       # GitHub requires you to explicitly check out your repository code
       - name: Checkout/Clone Code
         uses: actions/checkout@v4
+      # Special Dependencies (VM)???
+      # For docker build, this dep-addition goes to Dockerfile
+      #- name: Install (VM) Dependencies
+      #  run: |
+      #    sudo apt-get update
+      #    sudo apt-get install -y make libproc2
+      # Optional: Build docker image on-the-fly
+      #- name: Build Docker image
+      #  run: |
+      #   docker build -t procster:latest . -f docker/Dockerfile
       # Alternative section
       - name: Run Build
         # May consist of one or multiple (run: |\n) lines
         # Also: make libs2 && make main2
         run: |
-          echo "Compiling the code..."
+          echo "Build the code..."
           make libs2
           make main2
           make objclean
+      # Note: We could test here immediately and prevent the need to store
+      # artifacts. These are (in practice) mutually exclusive
+      #- name: Run tests
+      #  run: ./run_tests.sh
       - name: Store Artifacts
         uses: actions/upload-artifact@v4
         with:
