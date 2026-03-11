@@ -116,7 +116,7 @@ jobs:
       - name: Publish to Permanent GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-        tag_name: v1.0.0
+          tag_name: v1.0.0
         files: |
             procserver
             procserver2
