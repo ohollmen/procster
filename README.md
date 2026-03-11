@@ -1,7 +1,7 @@
 # Procster - List OS Processes over the Web
 
 Procster is a simple microhttpd based HTTP service that lists
-processes via a REST/JSON Web API.
+processes via a REST/JSON Web API. It also has a CLI utility to output processes in JSON (similar to REST web service).
 
 Procster service can:
 
@@ -12,7 +12,7 @@ Procster service can:
 Procster is meant to serve you in a toolkit / API manner, so that
 you merely tap on to it with your favorite HTTP client and decide what
 you do with the data. The processes can be queried with tools like
-curl/libcurl, python requests, Node.js fetch or Axios, etc.
+curl/libcurl, python requests, Node.js fetch or Axios, Browsers like Chrome, Firefox, etc.
 
 If you manage a cluster of servers, you can run Procster on each of the hosts
 to be able to query and manage processes on the whole cluster.
@@ -29,9 +29,11 @@ GUI to graphically get hang of what data Procsster can provide.
 
 Procster is written on top of 4 reusable footings:
 
-- **procps** - Linux process lister API, also used by "ps" and "top" utilities
+- **libprocps** - Linux process lister API, also used by "ps" and "top" utilities
+- **libproc2** - Newer Linux process lister API (from [procps-ng](https://gitlab.com/procps-ng/procps)),
+    similarly used by "ps" and "top" utilities (Ubuntu > 24.04, Debian > 12/Bookworm, Newer Fedora, CentOS)
 - **libmicrohttpd** - Lightweight, standalone HTTP server
-- **glib** - For helper data structures
+- **libglib** - For helper data structures (GHashTable, GSList)
 - **libjansson** - JSON library to parse and serialize JSON
 
 Choosing a very slim "embedded" web server (Instead of general purpose
@@ -48,6 +50,11 @@ intranet, home or closed network tool.
 See additional config possibilities of using HTTPS, authenication (HTTP
 Basic Auth or API Key).
 
+Enabling HTTPS
+- Ubuntu 18.04 had a severe shortage of SSL (certificate) support not being
+  compiled into microhttpd, as a result there was no HTTPS support with Ubuntu
+  out-of-box libmicrohttpd
+
 ## Compiling, Running and Testing
 
 Clone source from Github:
@@ -55,14 +62,23 @@ Clone source from Github:
 git clone https://github.com/ohollmen/procster.git
 cd procster
 ```
-Install dependencies (e.g) on Ubuntu 18.04:
+Install dependencies (e.g):
 ```
+#### Ubuntu 18.04 ####
 # For Processlister ... (procps 3.3.12, jansson 2.11)
 sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
 # Glib runtime + ...-dev (headers)
 sudo apt-get install -y libglib2.0-0 libglib2.0-dev
 # For Microhttpd
 sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
+sudo apt-get install -y libglib2.0-0 libglib2.0-dev
+#### Ubuntu 24.04 ####
+# (Note: libproc2-dev has headers, static and dyn. libs !)
+# Seems libproc2 uses libproc2/pids.h to replace proc/readproc.h (!)
+sudo apt-get install -y libproc2-dev libjansson4 libjansson-dev
+sudo apt-get install -y libglib2.0-0t64 libglib2.0-dev
+# For Microhttpd
+sudo apt-get install -y libmicrohttpd12t64 libmicrohttpd-dev
 ```
 For static linking you may additionally need:
 ```
@@ -151,4 +167,9 @@ wrong function signatures, etc.).
 ## Code Documentation (by Doxygen)
 
 Doxygen extracted code documentation is available at [ohollmen.github.io/procster](https://ohollmen.github.io/procster/).
+
+<!--
+## Misc Dependencies for applications
+-->
+
 
