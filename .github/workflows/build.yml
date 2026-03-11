@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      # ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     # By defaul runs in a VM. Optional container ...
     # container:
     #  image: procster-build-image:latest
@@ -43,6 +43,8 @@ jobs:
       #   docker build -t procster:latest . -f docker/Dockerfile
       # Alternative section
       - name: Run Build
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
         # May consist of one or multiple (run: |\n) lines
         # Also: make libs2 && make main2
         run: |
