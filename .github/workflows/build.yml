@@ -102,21 +102,21 @@ jobs:
   #         sudo chmod a+x ./proc2server
   #         ./proc2server 8001 &
   #         make test
-    release_job:
-      if: github.ref == 'b'
-      # Only run this if the tests pass
-      #needs: test_job
-      runs-on: ubuntu-latest
-      steps:
-        - name: Download Temporary Artifacts
-          uses: actions/download-artifact@v4
-          with:
-            name: pr-assets
+  release_job:
+    if: github.ref == 'b'
+    # Only run this if the tests pass
+    #needs: test_job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Temporary Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-assets
 
-        - name: Publish to Permanent GitHub Releases
-          uses: softprops/action-gh-release@v2
-          with:
-            tag_name: v1.0.0
-            files: |
-                procserver
-                procserver2
+      - name: Publish to Permanent GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+        tag_name: v1.0.0
+        files: |
+            procserver
+            procserver2
