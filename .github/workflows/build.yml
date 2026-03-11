@@ -93,6 +93,7 @@ jobs:
       - name: Run Tests
         run: |
           echo "Running unit tests..."
+          sudo chmod a+x ./proc2server
           ./proc2server 8001 &
           make test
   release_job:
