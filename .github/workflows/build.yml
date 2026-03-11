@@ -9,15 +9,16 @@ on:
   push:
     branches:
       - main
-runs:
-  using: 'node24'
+# Does not work here
+#runs:
+#  using: 'node24'
 # 2. Jobs (being triggered)
 jobs:
   build_job:
     runs-on: ubuntu-latest
     env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-      ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      #FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+      #ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
     # By defaul runs in a VM. Optional container ...
     # container:
     #  image: procster-build-image:latest
@@ -45,7 +46,8 @@ jobs:
       # Alternative section
       - name: Run Build
         env:
-          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+          #FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+          ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
         # May consist of one or multiple (run: |\n) lines
         # Also: make libs2 && make main2
         run: |
