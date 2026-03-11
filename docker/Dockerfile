@@ -7,8 +7,10 @@
 # - make: /bin/sh: Operation not permitted https://gitlab.alpinelinux.org/alpine/aports/-/issues/12396
 # TODO: Multi-stage build, separate *-dev and RT libs
 # NOTE: There seems to be problems with alpine:3.14 and make (make: /bin/sh: Operation not permitted). 3.13 Works (!?)
-# FROM alpine:3.14
+# FROM alpine:3.14 AS build
 FROM alpine:3.13 AS build
+# Seems Newer alpine uses libproc2 (like Debian,Ubuntu, newer Fedora, Centos)
+#FROM alpine:3.22 AS BUILD
 
 # Build tools (No make ?) install build-base ? alpine-sdk (superset of build-base) ?
 RUN apk update && apk add --no-cache gcc make git
@@ -17,7 +19,11 @@ RUN apk update && apk add --no-cache gcc make git
 RUN apk add --no-cache procps procps-dev jansson jansson-dev glib glib-dev libmicrohttpd libmicrohttpd-dev libc-dev
 #RUN apk add --no-cache procps jansson glib libmicrohttpd
 WORKDIR /root/
+# Either copy/clone from GitHub OR Local context dir
+# Note seems the long standing version Git: 674a9acf2d8e8bf098ffd2dd4ed2fccf4ccd4297
+# Does not exit docker docker CMD, where as newer does (compare !!!)
 RUN git clone https://github.com/ohollmen/procster.git
+#COPY ./ /root/procster
 WORKDIR /root/procster
 RUN make
 # ENTRYPOINT ["/app/procster"]
