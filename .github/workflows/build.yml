@@ -9,7 +9,8 @@ on:
   push:
     branches:
       - main
-
+runs:
+  using: 'node24'
 # 2. Jobs (being triggered)
 jobs:
   build_job:
