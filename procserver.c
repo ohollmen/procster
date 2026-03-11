@@ -62,49 +62,58 @@
 #include <jansson.h> // For config
 #include <ctype.h> // isdigit()
 #include "proclister.h"
+// #include "ms/miniserver.h"
 
-// MUST be min 256
-// #define POSTBUFFERSIZE  512
-#define POSTBUFFERSIZE  256
-// Example ONLY
-enum ConnectionType {GET = 0,POST = 1};
-enum ParsingState {INITED =0, PARSING, COMPLETE};
-typedef struct connection_info_struct CONNINFO;
-/** MHD connection/request Helper data structure for maintaining the "state"
-* of request data reading / parsing (as data is read in chunks) for HTTP methods
-* that have a HTTP Body (POST, PUT).
-* The state is maintained across multiple calls to MHD "answer_to_connection"
-* (response handler) callback function. The last call to "answer_to_connection"
-* will let response to be created.
-* The reference implementation of this flow is in function named answer_to_connection
-* in this file and will utilize post_body_parse as workhorse of parsing / assembling
-* the POST body (into connection_info_struct, member postdata).
-*/
-struct connection_info_struct {
-  // enum ConnectionType connectiontype;
-  // struct MHD_PostProcessor *postprocessor;
-  // FILE *fp;
-  // const char *answerstring;
-  // int answercode;
-  int debug;
-  int is_parsing; /**< State of parsing (INITED =0, PARSING, COMPLETE) */
-  int contlen;    /**< Currently stored content length / length gotten from "Content-length" */
-  char * conttype; /**< Content type */
-  char * postdata; /**< Body Content */
-  int size;
-  int used;
-};
+#include <sys/stat.h>
+
+static volatile int keep_running = 1;
+void sigterm_handler(int signum) {
+    (void)signum; // Unused parameter
+    keep_running = 0;
+    fprintf(stderr, "Received signal %d, stopping MHDn...\n", signum);
+}
+// Old loc of connection_info_struct
 
 
 char docroot[256] = {0};
+typedef struct miniserver miniserver;
+// Local minimalistic version server struct
+struct miniserver {
+  //char * name;    ///< Application / Service name
+  //mod-global: char * docroot; ///< Document root for static content.
+  //main: int port;       ///< TCP Port number where app / server is listening to connections.
+  int jsonindent; ///< See:jpretty, disambiguate
+  //GSList * actions; ///< Set of actions (TODO: Use regular array)
+  //action ** actions; ///< Set of actions as an (pointer-)array of actions (pointers)
+  //inithandler init; ///< Application initialization handler.
+  void * server;   ///< Lower level server object (MHD) ... TODO: Call s->mhd ? s->mhd_server ?
+  //int debug;       ///< App/server level debug
+  //int reqdebug;    ///< Request level (e.g. request dispatching and handling) debug. Also handlers can use this "hint" to enable conditional logging.
+  char * logfname; ///< Log file name. This file can be logged into by framework and application implemented handlers.
+  FILE * logfh;    ///< Log file handle (opened for logging)
+  char * pidfn;    ///< Pid file name (for file server will write PID into at startup)
+  // Experimental global response processor (triggers for every action , every request). 
+  //webhandler respproc;
+  //mimetype ** mts; ///< Array of mime-types (Also: mimecnt to look up from tail (if user defined ones get appended)
+  //main: int daemon;      ///< Flag to daemonize the app server to a child process
+  // array of opts for MHD Server options (trans string-to-enum)
+  int jpretty;     ///< Flag for prettifying JSON
+  char * sslcertfn;
+  char * sslkeyfn;
+  char * sslcert;
+  char * sslkey;
+  int secure;
+  //kvpara ** params; ///< App level parameters, e.g. conn. info
+};
 
-char * proc_list_json(int flags);
+// char * proc_list_json(int flags);
 // char * proc_list_json2(int flags);
 #ifdef NEED_POSTDATA_ITER
 /** 
 See: https://www.gnu.org/software/libmicrohttpd/tutorial.html#Processing-POST-data
 MHD_PostDataIterator
 */
+/*
 static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char *key,
               const char *filename, const char *content_type,
               const char *transfer_encoding, const char *data, 
@@ -116,9 +125,40 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
   
   return MHD_YES;
 }
+*/
 #endif
+//#include <sys/time.h>
+#include <sys/resource.h>
+#include <fcntl.h> // NEW Used to get implicit declaration of ‘open’ was here (Must be outsde func though !)
+/**** Routines originally in other files ******/
+// Copied instance
+void daemon_prep() {
 
-/** Generic string content sending.
+  struct rlimit r;
+  getrlimit(RLIMIT_NOFILE, &r);
+  // Leave open 0,1,2
+  for (int i=3;i<r.rlim_max;i++) { close(i); }
+  printf("daemon_prep(): Closed files (>=3), Turn output off 1,2\n");
+  //return;
+  int fd1 = open("/dev/null", O_RDWR);
+  if (fd1 < 0) { return; }
+  //dup2(fd1, 0); // Extra trial. if this (fd=0) is dup2()d, There's immediate exit !
+  dup2(fd1, 1);
+  dup2(fd1, 2);
+  int pid = setsid(); // pg (process group) leader, session leader
+  printf("PG/Sess Leader: %d\n", pid);
+}
+/////// In (New) framework: Set this in hook ... ///////
+int ac_headers(struct MHD_Response * response) {
+  int ok = 0;
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
+  ok = MHD_add_response_header (response, "Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
+  ok = MHD_add_response_header (response, "Cache-Control", "no-store");
+  return ok;
+}
+
+/** Send generic (null terminated) string content and discard request.
 * @param connection MHD_Connection / single request (See MHD Docs)
 * @param page - Page as (null terminated) text
 * @param status_code - HTTP numeirc status code (e.g. 200, 400. ...) to send with response
@@ -139,143 +179,15 @@ static int send_page (struct MHD_Connection *connection,  const char* page, int 
   return ret;
 }
 
-#define con_info_need_mem(con_info, cnt) (con_info->used + cnt + 1)
+// Old loc of multi-stage parsing macros
 
-/** Destroy POST Request info freeing all allocated memory.
-* It is recommended that this is called in the MHD main handler or req_term_cb() (which ? Both passed to MHD_start_daemon()
-* as 5th and 8th params respectively).
-* 
-*/
-void con_info_destroy(CONNINFO *con_info) {
-  if (!con_info) { return; }
-  if (con_info->postdata) { free(con_info->postdata); }
-  if (con_info->conttype) { free(con_info->conttype); }
-  free(con_info);
-  return;
-}
-/** Allocate CONNINFO for POST Parsing.
- * CONNINFO is used to keep track of body retrieval / buffering state across multiple calls
- * to MHD answer_to_connection() request handler callback.
- * @param connection - MHD connection / request struct
- * @return App specific HTTP Request object (BODY data reading state mgr)
- */
-CONNINFO *con_info_create(struct MHD_Connection *connection) {
-  const char * ct   = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-type");
-  const char * clen = MHD_lookup_connection_value (connection, MHD_HEADER_KIND, "Content-length");
-  fprintf(stderr, "create(): CT: %s, CLEN: %s\n", ct, clen);
-  
-  int initsize = 128; // Content buffer for con_info.postdata. CANNOT be fixed size)
-  
-  // Mark content-type and content-length to con_info
-  CONNINFO * con_info = (CONNINFO *)calloc (1, sizeof (CONNINFO));
-  if (!con_info) { return NULL; } // 0
-  // NEW:
-  con_info->contlen  = atoi(clen);
-  con_info->conttype = strdup(ct); // if (ct) { ... } ?
-  // Allow contlen to dictate initial size. Reallocations should not occur w. this.
-  if (con_info->contlen) { initsize = con_info_need_mem(con_info, con_info->contlen); }
-  // Test against post_body_max (from where ?)
-  if (con_info->contlen > 8000) { con_info_destroy(con_info); return NULL; }
-  con_info->postdata = (char*)calloc(initsize, sizeof(char)); // TODO: Decide on initial size (config?)
-  // con_info->is_parsing = 0; con_info->used = 0; // Redundant w. calloc
-  con_info->size = initsize;
-  con_info->debug = 1; // TODO: Pass/consider config or simply set outside
-  if (con_info->debug) { fprintf(stderr, "create(): con_info =  %p\n", con_info); }
-  return con_info;
-}
-
-
-
-/** Parse POST Body incrementally.
-* This gets called multiple times as a result of MHD answer_to_connection() being called multiple times with request types
-* that have HTTP Body present.
-* 
-* The state of request processing and body parsing is reflected in con_info.state in follwing ways:
-* - INITED (0) - con_info has been allocated and returned via param list con_cls
-* - PARSING (1) - the fragments being passed by calls to answer_to_connection() are being parsed.
-* - COMPLETE (2) - when body parsing has been completed, all POST content stored.
-* @param connection - MHD Connection
-* @param upload_data - Incoming POST data fragment (to add to collected POST data)
-* @param upload_data_size - Size of new fragment
-* @param con_cls - MHD Request specific user-data, Here: CONNINFO *
-* @return MHD_NO for fatal errors that should terminate whole HTTP request, MHD_YES for valid state and progression of parsing.
-* A typical usage within answer_to_connection() might look like this:
-     ...
-*/
-int post_body_parse(struct MHD_Connection *connection, const char *upload_data,  size_t *upload_data_size, void ** con_cls) {
-  if (!connection) { return MHD_NO; }
-  
-  CONNINFO * con_info = NULL;
-  con_info = *con_cls; // Grab con_info from HMD-conventional void **
-  // Enable following if-else blocks to keep more of the parsing state handling here (instead of macros)
-  /*
-  // Establishing con_cls (last param of request handler (answer_to_connection()))
-  if (!*con_cls) {
-    con_info = con_info_create(connection);
-    if (!con_info) { return MHD_NO; }
-    *con_cls = con_info;
-  }
-  else { con_info = *con_cls; }
-  
-  ///////////// Transition to parsing and getting (first fragment of) body content /////
-  if (!con_info->is_parsing) { con_info->is_parsing = 1; return MHD_YES; } // 1
-  */
-  // POST Body Chunk/fragment coming in OR all fragments parsed
-  // 
-  if (!con_info) { return MHD_NO; } // Should always have con_info by now
-  
-  // New chunk coming (could be INITED,PARSING)
-  if (*upload_data_size) {
-    int cnt = *upload_data_size;
-    int need = con_info_need_mem(con_info, cnt); // (con_info->used + cnt + 1);
-    if (need > con_info->size) { // Fixed (off-by-one) >= to > to not realloc unnecessarily
-      int newsize = 2*con_info->size; // Advisory, 2X may not be enough (Need: MAX(newsize, need))
-      if (need > newsize) { newsize = need; } // Fix to match needed size (if advice is smaller)
-      con_info->postdata = (char*)realloc(con_info->postdata, newsize);
-      if (!con_info->postdata) { return MHD_NO; }
-      con_info->debug && fprintf(stderr, "Realloc from %d to: %d\n", con_info->size, newsize);
-      con_info->size = newsize;
-
-    }
-    // Receive the post data and write them into the buffer (new: binary append)
-    // strncat(con_info->postdata, upload_data, cnt); // string(upload_data, *upload_data_size); // OLD (for text content only)
-    memcpy(con_info->postdata + con_info->used, upload_data, cnt); // Tolerates binary and does not need to find end.
-    con_info->used += cnt;
-    con_info->postdata[con_info->used] = '\0'; // ->used gets us lastusedoffset + 1
-    *upload_data_size = 0; // Mark/flag processed / consumed (Per MHD doc)
-  }
-  else { // Done (*upload_data_size is 0, last call)
-    ///////// Data now in con_info->postdata //////////
-    con_info->debug && fprintf(stderr, "Got POST Body:\n%s\n", con_info->postdata);
-    // *con_cls = NULL; // Mark/flag "Done" ? Set outside because there's no access to con_info w/o *con_cls !
-    con_info->is_parsing = 2;
-    // Mark length for case contlen == 0 (contlen not gotten from headers) ?
-    //if (!con_info->contlen) { con_info->contlen = con_info->used; } // ->size ?
-  }
-  
-  return MHD_YES; // 1;
-}
-/** Macros for detecting parsing state (from MHD multiple calls to response handler).
-* Macros have to be called in the order they appear here (See also example for post_body_parse()).
-* This is because they also change the state of the parsing.
-* These macros eliminate the calls to parser.
-* @todo: Name parsing_* instead of parse_* (?)
-*/
-// Usage: if (parse_no_state(c)) { return MHD_NO; }
-// Do note call parse function before this detection
-#define parse_no_state(c) (!c)
-// Usage: if (parse_starting(c)) { return MHD_YES; }
-// Set *con_cls and Also transition 0 -> 1
-#define parse_starting(c) ((!*con_cls) && (!c->is_parsing) && (c->is_parsing = 1) && (*con_cls = c))
-// Usage: if (parse_running(c))  { return MHD_YES; }
-// Keep state, no transitions
-#define parse_running(c)  ((*con_cls) && (c->is_parsing == 1))
-// Usage: parse_ending(c) . TODO: consider if we should stick with setting state (2) inside POST parser (NOT macro)
-#define parse_ending(c)   ((*con_cls) && (!*upload_data_size) && (c->is_parsing) && (c->is_parsing = 2)) // COMPLETE
 /** MHD POST Handler example.
+ * Example of "proper" / generic multi-stage (state-aware) POST request parsing.
+ * NOTE: This should be fairly easily convertable to generic
  * Echoes back the request content (w/o parsing it in between).
  */
-int answer_to_connection (void *cls, struct MHD_Connection *connection,
+#ifdef BODY_PARSING
+int answer_to_connection_echo_back (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
   if (!strcmp (method, "GET")) { return send_page(connection, "No GET allowed !!!\n", MHD_HTTP_OK); }
@@ -283,34 +195,39 @@ int answer_to_connection (void *cls, struct MHD_Connection *connection,
   
   printf("URL(%s): %s Datasize: %lu, con_cls: %p\n", method, url, *upload_data_size, *con_cls);
   
-  CONNINFO * con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
+  //CONNINFO * con_info = *con_cls ? (CONNINFO *)*con_cls : con_info_create(connection);
+  request * con_info = *con_cls ? *con_cls : req_new((miniserver *)cls, url, method); // Should be named req
+  if (!*con_cls) { req_init(con_info, connection);  } // Redundant: *con_cls = req;
   // Checks that we have con_info
   if (parse_no_state(con_info)) { return MHD_NO; } // 0 con_info_create() failed ?
   /* */
   if (parse_starting(con_info)) { return MHD_YES; } // 1 
   int pret = post_body_parse(connection, upload_data, upload_data_size, con_cls);
-  if (!pret) { if (con_info) { con_info_destroy(con_info); } return MHD_NO; } // Fatal error - terminate request
+  if (!pret) { if (con_info) { req_free(con_info); } return MHD_NO; } // Fatal error (MHD_NO) - terminate request OLD: con_info_destroy()
   if (parse_running(con_info))  { return MHD_YES; }
   /* coverity[assign_where_compare_meant] */
   parse_ending(con_info);
   ////////// Handle Request: Send the request content as response content /////////////
-  // TODO: Should get handler from  app level (cls) or request level (con_cls). Haldler should be set earlier by ... (?)
+  // TODO: Should get handler from  app level (cls) or request level (con_cls). Handler should be set earlier by ... (?)
   struct MHD_Response *
     response = MHD_create_response_from_buffer(strlen(con_info->postdata), (void*)con_info->postdata, MHD_RESPMEM_MUST_COPY);
-  if (con_info) { con_info_destroy(con_info); } // Must free !
+  if (con_info) { req_free(con_info); } // Must free ! OLD: con_info_destroy
   int ok   = MHD_add_response_header(response, MHD_HTTP_HEADER_CONTENT_TYPE, "application/json"); if (!ok) { return MHD_NO; }
   int ret = MHD_queue_response(connection, MHD_HTTP_OK, response);
   MHD_destroy_response(response); // Model
 
   return ret;
 }
+#endif
 
 /** Legacy: Generic POST Handler with POST Body parsing.
 * See: MHD_post_process and MHD_create_post_processor
 * MHD_ContentReaderFreeCallback
 * MHD_RequestCompletedCallback set by  MHD_OPTION_NOTIFY_COMPLETED (2 pointer params)
 */
-int answer_to_connection1 (void *cls, struct MHD_Connection *connection,
+
+/*
+int answer_to_connection_naive_echo (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, size_t *upload_data_size, void **con_cls) {
   if (!strcmp (method, "GET")) {return send_page(connection, "No GET allowed !!!\n", MHD_HTTP_OK);}
@@ -336,6 +253,8 @@ int answer_to_connection1 (void *cls, struct MHD_Connection *connection,
 
   return ret;
 }
+*/
+
 
 /*
 if (!*con_cls) {
@@ -385,7 +304,7 @@ if (!*con_cls) {
 #include <sys/stat.h> // struct stat
 /** Try to resolve url to a static file and return response for it.
 * @param url - Request URL to test for static content
-* @return MHD_Response (pointer) for static file or NULL
+* @return MHD_Response (pointer) for static file or NULL if URL is not a static file.
 * @todo: Check suffix and try to map to appropriate mime-type
 */
 struct MHD_Response * trystatic(const char * url) {
@@ -403,14 +322,14 @@ struct MHD_Response * trystatic(const char * url) {
   uint64_t size = statbuf.st_size; // off_t
   printf("Ready to create response from fd: %d (%ld B)\n", fd, size);
   // MHD will close fd after. Note also _from_fd_at_offset(..., offset)
-  struct MHD_Response * response = MHD_create_response_from_fd(size, fd); // Model
+  struct MHD_Response * mhd_response = MHD_create_response_from_fd(size, fd); // Model
   // Extract suffix
   char * suff = strrchr(url, '.');
   if (suff) { printf("Found suffix: '%s'\n", ++suff); }
   //char * defmime = "text/plain"; // DECLARED_BUT_NOT_REFERENCED
   //MHD_add_response_header (response, "Content-Type", defmime);
   // close(fd);
-  return response;
+  return mhd_response;
 }
 /** Check HTTP Basic credentials.
 
@@ -428,23 +347,9 @@ int basic_creds_ok(struct MHD_Connection *connection) {
   // if (strcmp(corrpass, pass)) { return 0; }
   return 1;
 }
-/** Extract pid number from (relative) Web URL.
- * @param url - procserver kill process URL
- * @return pid number or 0 on failure to extract pid properly
- */
-int pid_extract(const char * url) {
-  int pid = 0;
-  if (!url) { return 0; }
-  int len = strlen(url);
-  if (len > 15) {return 0; }
-  int i = len-1;
-  for(;(i > 4) && isdigit(url[i]);) { printf("Isdig: %d\n", i); i--; }
-  printf("Scanned pid start to: %d\n", i);
-  if (i) { pid = atoi(&(url[i+1])); }
-  return pid;
-}
+
 /** MHD Response handler for creating OS Process listing.
-* Example of simple GET handling of HTTP Request.
+* Provides an example of simple GET handling of HTTP Request.
 */
 int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
@@ -464,11 +369,16 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   int ok = 0; // Must be early to not "pass initialization" (cov)
   int httpcode = MHD_HTTP_OK;
   // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
-  if ( !strcmp(url, "/proclist")) { // , 9  !strncmp(url, "/procs", 6) ||
+  if ( !strcmp(url, "/proclist")) {
     //
     ctype = "application/json";
-    // struct MHD_Response * create_proclisting_json2(const char * url) {
+#ifdef PROC2
+    struct pids_info *info = NULL;
+    struct pids_fetch * fetch_result = proc_fetch(&info);
+    json_t * array = proc2_list_json(info, fetch_result);
+#else
     json_t * array = proc_list_json2(0); // Produce Process list content (OLD: page = ...)
+#endif
     page = json_dumps(array, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
     json_decref(array); // array = NULL; // Model
@@ -478,16 +388,26 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   }
   else if (!strcmp(url, "/proctree")) { // 6? , 9
     ctype = "application/json";
-    proc_t * root = proc_tree();
     json_t * obj = NULL;
+#ifdef PROC2
+    struct pids_info *info = NULL;
+    struct pids_fetch * fetch_result = proc_fetch(&info);
+    obj = proc2_tree(info, fetch_result);
+    if (!obj) { printf("Process tree root does not have JSON !!!\n"); return 1; }
+    //OLD:procs = p0->proc_j;
+    //OLD:psn_free(p0);
+#else
+    proc_t * root = proc_tree();
     // PW.BRANCH_PAST_INITIALIZATION - event: "A goto jumps past the initialization of a variable"
     if (!root) { page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
-    //json_t *
     obj = ptree_json(root, 0);
     if (!obj) { ptree_free(root, 0); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; goto CHECKPAGE; }
+#endif
     page = json_dumps(obj, jflags);
     memmode = MHD_RESPMEM_MUST_FREE;
+#ifndef PROC2
     ptree_free(root, 0);  // Model
+#endif
     // "Resource \"root\" is not freed or pointed-to in \"ptree_free\"."
     json_decref(obj); // obj = NULL; // Model ?
     CHECKPAGE:
@@ -526,13 +446,12 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   response = MHD_create_response_from_buffer (strlen(page), (void*) page, memmode);
   
   ok = MHD_add_response_header (response, "Content-Type", ctype); // "application/json"
-  // Allow cross-domain ref (example from docker headers setup w. daemon cl opts --api-cors-header *)
-  
-  ok = MHD_add_response_header (response, "Access-Control-Allow-Methods", "HEAD, GET, POST, DELETE, PUT, OPTIONS");
-  ok = MHD_add_response_header (response, "Access-Control-Allow-Origin", "*");
-  ok = MHD_add_response_header (response, "Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth");
-  ok = MHD_add_response_header (response, "Cache-Control", "no-store");
-  if (!ok) { httpcode = 203;}
+  // Allow conditional cross-domain ref (example from docker headers setup w. daemon cl opts --api-cors-header *)
+  // 203 Non-Authoritative Information
+  //if () {
+  ok = ac_headers(response);
+  if (!ok) { httpcode = 203; }
+  //}
   // MHD_add_response_header (response, "Content-Type", "");
   //  return request; }
   
@@ -546,6 +465,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
 /** Post request Callback launched by MHD after completing request.
 * 
 */
+/*
 void req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, enum MHD_RequestTerminationCode toe) {
   fprintf(stderr, "Request Terminated (con_cls=%p, cls=%p) !\n", con_cls, cls); // Was *con_cls: "Directly dereferencing pointer \"con_cls\"."
   if (! con_cls || !*con_cls) { return; } // Important. See manual p. 18
@@ -554,10 +474,12 @@ void req_term_cb(void *cls, struct MHD_Connection * connection, void **con_cls, 
   // NOT: return NULL;
   return;
 }
+*/
 
+// Old PID Saving. Note: new impl in fw.
 int savepid(json_t * json) {
   if (!json) { return 1; }
-  json_t * jpidfn = json_object_get(json, "pidfname");
+  json_t * jpidfn = json_object_get(json, "pidfn");
   //if (jpidfn) { s->pidfn = json_string_value(jpidfn); }
   if (!jpidfn) { return 2; }
   const char * pidfn = json_string_value(jpidfn);
@@ -571,53 +493,36 @@ int savepid(json_t * json) {
   }
   return 0;
 }
-
-void daemon_prep() {
-#include <sys/time.h>
-#include <sys/resource.h>
-  struct rlimit r;
-  getrlimit(RLIMIT_NOFILE, &r);
-  // Leave open 0,1,2
-  for (int i=3;i<r.rlim_max;i++) { close(i); }
-  printf("daemon_prep(): Closed files (>=3), Turn output off 1,2\n");
-  //return;
-  int fd1 = open("/dev/null", O_RDWR);
-  if (fd1 < 0) { return; }
-  //dup2(fd1, 0); // Extra trial. if this is dup2()d, There's immediate exit !
-  dup2(fd1, 1);
-  dup2(fd1, 2);
-  int pid = setsid(); // pg leader, session leader
-  printf("PG/Sess Leader: %d\n", pid);
+int savepid_simple(char * pidfn, int pid) {
+  if (!pidfn) { return 1; }
+  if (!pid) { return 2; }
+  FILE * logfh = fopen(pidfn, "w");
+  if (!logfh) { return 3; }
+  fprintf(logfh, "%d\n", pid);
+  if (logfh) { fclose(logfh); }
+  return 0;
 }
-/* Daemonize
- * - Close files
- * - Set as session leader
+// OLD: daemon_prep()
+
+/** Launch Procster MHD server (the old non-framework version, used by old main()).
  */
 void daemon_launch(int port, json_t * json) {
-  struct MHD_Daemon * mhd = NULL;
-  int log = 1;
-  char * logfn = "/tmp/procster.log";
-  FILE * fh = stdout;
-  if (log) {
-    fh = fopen(logfn, "wb");
-    setbuf(fh, NULL);
-  }
-  // Refresh FD:s ? Systemd can capture output
-  int piderr = savepid(json);
-  if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); }
+  // OLD Log and PID
+  
   // apc - Accept Policy Callback
   // TODO: Have this as config string (or array) member in JSON file (e.g. "mhdrunflags")
   // MHD_USE_TCP_FASTOPEN, MHD_USE_AUTO (poll mode), MHD_USE_DEBUG == MHD_USE_ERROR_LOG
   int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD; 
-  mhd = MHD_start_daemon (flags, port, NULL, NULL,
+  struct MHD_Daemon * mhd = MHD_start_daemon (flags, port, NULL, NULL,
     // NOTE: Connection handler: answer_to_connection*
     &answer_to_connection0, NULL,
     MHD_OPTION_NOTIFY_COMPLETED,
     NULL, NULL, // req_term_cb, userdata MHD Manual p. 18 ()
     
     MHD_OPTION_END); 
-  if (NULL == mhd) { fprintf(fh, "Could not start MHD (check if port %d is taken)\n", port); } // return 3;
-  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/)\n", port, getpid(), port);
+  FILE * fh = stderr; // TODO: 
+  if (NULL == mhd) { fprintf(fh, "Could not start MHD (check if port %d is taken)\n", port); } // return 3; 
+  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/proclist)\n", port, getpid(), port);
   int ok = 100; // MHD_run(mhd); // MHD_YES on succ
   // Note:
   // - Starting w. systemd we always receive EOF (-1) here immediately (!?)
@@ -625,6 +530,8 @@ void daemon_launch(int port, json_t * json) {
   // '\n' triggers return (line-buffering).
   //(void) getchar ();
   //int c = getchar();
+  
+  /*
   int c;
   // 
   while (c = getchar()) {
@@ -632,21 +539,64 @@ void daemon_launch(int port, json_t * json) {
   }
   fprintf(fh, "Stopping Daemon (getchar=%d, ok=%d)\n", c, ok);
   MHD_stop_daemon (mhd);
+  */
+}
+// Loaner from external fw to let MHD run as persistent server 
+void server_run_wait(miniserver * ms) {
+  int c; int ccnt = 0;
+  setbuf(stdin, NULL);
+  while (c = getchar()) {
+    ccnt++;
+    fprintf(stderr, "Got char: val:%d\n", c); // Ctrl-D => -1
+    if (c == -1) { break; } // OLD: 255
+  }
+  fprintf(ms->logfh, "Stopping Daemon (after receiving getchar=%d, ccnt=%d)\n", c, ccnt);
+  if (ms->server) { MHD_stop_daemon (ms->server); }
+  if (ms->logfh) { fprintf(ms->logfh, "Closing logging to '%s'\n", ms->logfname); fclose(ms->logfh); }
+}
+// sigprocmask() - solution
+// Atomically unblock signals and wait if a signal arrives while sigsuspend is active, it will be delivered
+// and the handler will be called, setting keep_running = 0. sigsuspend will then return, and the loop will terminate.
+void server_run_wait_sigproc(miniserver * ms) {
+  int ret = 0;
+  sigset_t  block_mask, old_mask, empty_mask; // 3 mask sets
+  
+  // Set the signal mask, saving the old one
+  // SIG_BLOCK - block, modify, SIG_UNBLOCK - unblock, modify, SIG_SETMASK - set explictly 1-by-1
+  //int spret = sigprocmask(SIG_BLOCK, &block_mask, &old_mask);
+  //if (spret == -1) { perror("sigprocmask SIG_BLOCK"); return; }
+  struct sigaction sa; // In stack !
+  memset(&sa, 0, sizeof(sa));
+  sa.sa_handler = sigterm_handler;
+  sa.sa_flags = 0; // No special flags
+  if (sigaction(SIGINT,  &sa, NULL) == -1) { perror("sigaction SIGINT"); return 1; }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) { perror("sigaction SIGTERM"); return 1; }
+  
+  // Should run/start daemon here ????
+  
+  sigemptyset(&empty_mask); // Init to empty mask for sigsuspend. Opposite: sigfillset()
+  
+  while (keep_running) {
+    sigsuspend(&empty_mask); // const sigset_t *mask
+  }
+  if (ms->server) { MHD_stop_daemon (ms->server); }
 }
 /** Main for (Micro HTTP Daemon) process app.
 * 5th param to MHD_start_daemon() defines the main connection handler
 * (that should do respective dispatching if app handles many different actions).
 */
 int main (int argc, char *argv[]) {
-  
+  int log = 0;
   if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
   int port = atoi(argv[1]);
   int daemon = 0;
   for (int i=0;i<argc;i++) { if (!strcmp(argv[i], "--daemon")) { daemon = 1; break; }} // printf("%s\n", argv[i]);
   printf("Daemonize=%d (main pid=%d)\n", daemon, getpid());
+  
   char * docr = getcwd(docroot, sizeof(docroot));
   if (!docr) { printf("No docroot gotten (!?)\n"); return 2; }
   printf("Docroot: %s\n", docroot);
+  /////////////////////////////////////////////////////////
   json_error_t error = {0};
   /* the error variable contains error information */
   json_t * json = json_load_file("./procster.conf.json", 0, &error);
@@ -654,10 +604,30 @@ int main (int argc, char *argv[]) {
   else { printf("Parsed JSON: %llu\n", (unsigned long long)json); }
   if (!daemon) { goto RUN; }
   pid_t pid = fork();
-  if (pid == 0) { printf("Parent exiting\n"); return 0; }
+  if (pid == 0) { printf("Parent (PID: %d) exiting\n", getpid()); return 0; }
   daemon_prep(); // In child only
   RUN:
-  daemon_launch(port, json);
+  //////////// Separate (local) logging and PID saving from essentials of daemon_launch
+  log = 1;
+  char * logfn = "/tmp/procster.log";
+  char * pidfn = "./procster.pid";
+  FILE * fh = stdout;
+  if (log) { fh = fopen(logfn, "wb"); setbuf(fh, NULL); }
+  // Refresh FD:s ? Systemd can capture output
+  int piderr = savepid(json);
+  //int piderr = savepid_simple(pidfn, getpid() );
+  if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); }
+  ///////////////////////////////
   
+  daemon_launch(port, json);
+  // TODO: server_new_procster(json) // Implement *essential* parts (only)
+  // NO: debug, reqdebug, daemon (passed from cli?), docroot (auto-probed by getcwd), user, group
+  // OK" pidfn, possibly logfn, port
+  miniserver * ms = calloc(1, sizeof (struct miniserver)); // server_new(json); // large JSON loading func in ms/miniserver.c
+  ms->logfh = fh; ms->server = NULL; // Make daemon_launch return MHD server ?
+  // TODO: copy / inline here: server_run_wait_procster() ?
+  server_run_wait(ms); // microthhpd getchar() workarounds In ms/miniserver.c.
+  //server_run_wait_sigproc(ms);
   return 0;
 }
+
