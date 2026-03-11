@@ -10,6 +10,7 @@
 
 #include <errno.h> // errno
 #include <string.h> // strerror()
+#include <ctype.h> // isdigit()
 //#include <proc/readproc.h>
 //#include <proc/sysinfo.h> // Hertz, getbtime
 
@@ -62,6 +63,23 @@ int proc_kill(int pid) {
   }
   return 0;
 }
+
+/** Extract pid number from (relative) Web URL path.
+ * @param url - procserver kill process URL
+ * @return pid number or 0 on failure to extract pid properly
+ */
+int pid_extract(const char * url) {
+  int pid = 0;
+  if (!url) { return 0; }
+  int len = strlen(url);
+  if (len > 15) {return 0; }
+  int i = len-1;
+  for(;(i > 4) && isdigit(url[i]);) { printf("Isdig: %d\n", i); i--; }
+  printf("Scanned pid start to: %d\n", i);
+  if (i) { pid = atoi(&(url[i+1])); }
+  return pid;
+}
+
 /** Convert / Format p->start_time into human readable ISO time.
 * @param p - Process Object
 * @param tbuf - String buffer for ISO time
