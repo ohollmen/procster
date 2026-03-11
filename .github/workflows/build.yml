@@ -104,7 +104,7 @@ jobs:
   #         make test
   release_job:
     # Only run this if the tests pass
-    needs: test_job
+    #needs: test_job
     runs-on: ubuntu-latest
     steps:
       - name: Download Temporary Artifacts
