@@ -1,5 +1,6 @@
 *.o
-*.md
+# Need README.md
+#*.md
 *.pid
 *.yml
 *.service
