@@ -19,6 +19,7 @@ jobs:
     env:
       #FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       #ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
+      GREETING: Hello
     # By defaul runs in a VM. Optional container ...
     # container:
     #  image: procster-build-image:latest
