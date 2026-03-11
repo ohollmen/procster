@@ -1,0 +1,74 @@
+---
+# yamllint .github/workflows/build.yml
+name: Build and Test Pipeline
+
+# 1. Trigger
+on:
+  push:
+    branches:
+      - main
+
+# 2. Jobs (being triggered)
+jobs:
+  build_job:
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub requires you to explicitly check out your repository code
+      - name: Checkout/Clone Code
+        uses: actions/checkout@v4
+      # Alternative section
+      - name: Run Build
+        # May consist of one or multiple (run: |\n) lines
+        # Also: make libs2 && make main2
+        run: |
+          echo "Compiling the code..."
+          make libs2
+          make main2
+          make objclean
+      - name: Store Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: pr-assets
+          path: |
+            procserver
+            procserver2
+            proc2server
+            proctest
+            procutil
+            procutil2
+  test_job:
+    # 3. Dependencies !! (test runs after 'build_job')
+    # Note should refer to earlier artifacts stored by name
+    needs: build_job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Temporary Build Artifacts (pr-assets)
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-assets
+      # Note - this implies fresh checkout (no build products !)
+      #- name: Checkout Code
+      #  uses: actions/checkout@v4
+      # Note: Port must be in sync with make test target !!!
+      - name: Run Tests
+        run: |
+          echo "Running unit tests..."
+          ./proc2server 8001 &
+          make test
+  release_job:
+    # Only run this if the tests pass
+    needs: test_job
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Temporary Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pr-assets
+
+      - name: Publish to Permanent GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.0.0
+          files: |
+            procserver
+            procserver2
