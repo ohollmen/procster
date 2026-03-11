@@ -1,11 +1,18 @@
 {
   "user": "mrsmith",
   "group": "users",
-  "port": 8181,
+  
   "docroot": ".",
+  "port": 8181,
+  "daemon": 0,
   "log": null,
-  "debug": 0,
-  "pidfname": "./procster.pid",
+  "pidfn": "./procster.pid",
+  "logfnXX": "/tmp/procster.log",
+  "logfn": "stderr",
+  "debug": 5,
+  "reqdebug": 1,
+  "jpretty": 1,
+  "appinit": "procster_init",
   "params": {
     "alarmage": 86400
   }
