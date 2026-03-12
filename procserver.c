@@ -376,6 +376,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     struct pids_info *info = NULL;
     struct pids_fetch * fetch_result = proc_fetch(&info);
     json_t * array = proc2_list_json(info, fetch_result);
+    if (info) procps_pids_unref(&info); // NEW
 #else
     json_t * array = proc_list_json2(0); // Produce Process list content (OLD: page = ...)
 #endif
@@ -603,8 +604,8 @@ int main (int argc, char *argv[]) {
   if (!json) { printf("JSON parsing error: %s\n", error.text); }
   else { printf("Parsed JSON: %llu\n", (unsigned long long)json); }
   if (!daemon) { goto RUN; }
-  pid_t pid = fork();
-  if (pid == 0) { printf("Parent (PID: %d) exiting\n", getpid()); return 0; }
+  pid_t pid = fork(); // Parent: Child pid returned, Child: 0 ret'd
+  if (pid) { printf("Parent (PID: %d) exiting for child daemon (PID: %d)\n", getpid(), pid); return 0; }
   daemon_prep(); // In child only
   RUN:
   //////////// Separate (local) logging and PID saving from essentials of daemon_launch
