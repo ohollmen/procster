@@ -151,7 +151,7 @@ void daemon_prep() {
   // 0,1,2: stdin, stdout, stderr
   int fd1 = open("/dev/null", O_RDWR);
   if (fd1 < 0) { return; }
-  //dup2(fd1, STDIN_FILENO); // Extra trial. if this (fd=0, stdin) is dup2()d, There's immediate exit - ! EOF !
+  dup2(fd1, STDIN_FILENO); // Extra trial. With getchar() if this (fd=0, stdin) is dup2()d, There's immediate exit - ! EOF !
   dup2(fd1, STDOUT_FILENO); // 1 - STDOUT_FILENO
   dup2(fd1, STDERR_FILENO); // 2 - STDERR_FILENO
   if (fd1 > 2) { close(fd1); }
