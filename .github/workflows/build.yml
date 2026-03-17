@@ -46,6 +46,7 @@ jobs:
       #   docker build -t procster:latest . -f docker/Dockerfile
       - name: Install (extra) dependencies
         run: |
+          sudo apt update
           sudo apt-get install -y libproc2-dev libjansson4 libjansson-dev
           sudo apt-get install -y libglib2.0-0t64 libglib2.0-dev
           sudo apt-get install -y libmicrohttpd12t64 libmicrohttpd-dev
