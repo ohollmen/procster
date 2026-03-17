@@ -25,6 +25,7 @@ MUSTACHE=./node_modules/mustache/bin/mustache
 EXESUFF=
 IMG_VER=0.0.3
 all: libs main
+all2: libs2 main2
 
 libs:
 	# Actually test-exe
