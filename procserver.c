@@ -70,7 +70,7 @@ static volatile int keep_running = 1;
 void sigterm_handler(int signum) {
     (void)signum; // Unused parameter
     keep_running = 0;
-    fprintf(stderr, "Received signal %d, stopping MHDn...\n", signum);
+    fprintf(stderr, "Received signal %d, stopping MHD...\n", signum);
 }
 // Old loc of connection_info_struct
 
@@ -133,20 +133,29 @@ static int iterate_post (void *coninfo_cls, enum MHD_ValueKind kind, const char 
 /**** Routines originally in other files ******/
 // Copied instance
 void daemon_prep() {
-
+  // Detach from controlling terminal. Note: Must be first
+  int pid = setsid(); // New session, pg (process group) leader, session leader
+  fprintf(stderr, "PG/Sess Leader: %d\n", pid);
+  // int pidf = fork(); // Second fork()
+  // if (pidf < 0) exit(EXIT_FAILURE);
+  // if (pidf > 0) exit(EXIT_SUCCESS);
+  //chdir("/"); // Stephens
+  //umask(0); // Stephens
   struct rlimit r;
   getrlimit(RLIMIT_NOFILE, &r);
   // Leave open 0,1,2
-  for (int i=3;i<r.rlim_max;i++) { close(i); }
-  printf("daemon_prep(): Closed files (>=3), Turn output off 1,2\n");
+  // open_max(); // ?
+  for (int i=3;i<r.rlim_cur;i++) { close(i); }
+  printf("daemon_prep(): Closed files (>=3 .. %d), Turn output off 1,2\n", r.rlim_cur); // r.rlim_max (Do NOT USE) / r.rlim_cur
   //return;
+  // 0,1,2: stdin, stdout, stderr
   int fd1 = open("/dev/null", O_RDWR);
   if (fd1 < 0) { return; }
-  //dup2(fd1, 0); // Extra trial. if this (fd=0) is dup2()d, There's immediate exit !
-  dup2(fd1, 1);
-  dup2(fd1, 2);
-  int pid = setsid(); // pg (process group) leader, session leader
-  printf("PG/Sess Leader: %d\n", pid);
+  //dup2(fd1, STDIN_FILENO); // Extra trial. if this (fd=0, stdin) is dup2()d, There's immediate exit - ! EOF !
+  dup2(fd1, STDOUT_FILENO); // 1 - STDOUT_FILENO
+  dup2(fd1, STDERR_FILENO); // 2 - STDERR_FILENO
+  if (fd1 > 2) { close(fd1); }
+  
 }
 /////// In (New) framework: Set this in hook ... ///////
 int ac_headers(struct MHD_Response * response) {
@@ -545,40 +554,46 @@ void daemon_launch(int port, json_t * json) {
 // Loaner from external fw to let MHD run as persistent server 
 void server_run_wait(miniserver * ms) {
   int c; int ccnt = 0;
-  setbuf(stdin, NULL);
+  FILE * lfh = ms->logfh; // ms->logfh / stderr
+  //setbuf(stdin, NULL);
+  fprintf(lfh, "Coming to pause()\n");
+  pause();
+  /*
   while (c = getchar()) {
     ccnt++;
     fprintf(stderr, "Got char: val:%d\n", c); // Ctrl-D => -1
     if (c == -1) { break; } // OLD: 255
   }
-  fprintf(ms->logfh, "Stopping Daemon (after receiving getchar=%d, ccnt=%d)\n", c, ccnt);
+  */
+  
+  fprintf(lfh, "Stopping Daemon (after receiving getchar=%d, ccnt=%d)\n", c, ccnt);
   if (ms->server) { MHD_stop_daemon (ms->server); }
-  if (ms->logfh) { fprintf(ms->logfh, "Closing logging to '%s'\n", ms->logfname); fclose(ms->logfh); }
+  if (lfh) { fprintf(lfh, "Closing logging to '%s'\n", ms->logfname); fclose(lfh); }
 }
-// sigprocmask() - solution
+// sigprocmask() - solution for stopping MHD.
 // Atomically unblock signals and wait if a signal arrives while sigsuspend is active, it will be delivered
 // and the handler will be called, setting keep_running = 0. sigsuspend will then return, and the loop will terminate.
 void server_run_wait_sigproc(miniserver * ms) {
   int ret = 0;
   sigset_t  block_mask, old_mask, empty_mask; // 3 mask sets
-  
+  if (!ms) { return; }
   // Set the signal mask, saving the old one
   // SIG_BLOCK - block, modify, SIG_UNBLOCK - unblock, modify, SIG_SETMASK - set explictly 1-by-1
   //int spret = sigprocmask(SIG_BLOCK, &block_mask, &old_mask);
   //if (spret == -1) { perror("sigprocmask SIG_BLOCK"); return; }
-  struct sigaction sa; // In stack !
-  memset(&sa, 0, sizeof(sa));
-  sa.sa_handler = sigterm_handler;
-  sa.sa_flags = 0; // No special flags
-  if (sigaction(SIGINT,  &sa, NULL) == -1) { perror("sigaction SIGINT"); return 1; }
-  if (sigaction(SIGTERM, &sa, NULL) == -1) { perror("sigaction SIGTERM"); return 1; }
+  struct sigaction sa = {0}; // In stack !
+  // memset(&sa, 0, sizeof(sa)); // Prefer {0};
+  sa.sa_handler = sigterm_handler; // Sets keep_running = 0;
+  sa.sa_flags = 0; // No special flags (implied by {0})
+  if (sigaction(SIGINT,  &sa, NULL) == -1) { perror("sigaction SIGINT"); return; }
+  if (sigaction(SIGTERM, &sa, NULL) == -1) { perror("sigaction SIGTERM"); return; }
   
   // Should run/start daemon here ????
   
   sigemptyset(&empty_mask); // Init to empty mask for sigsuspend. Opposite: sigfillset()
   
   while (keep_running) {
-    sigsuspend(&empty_mask); // const sigset_t *mask
+    sigsuspend(&empty_mask); // const sigset_t *mask. Like pause() 
   }
   if (ms->server) { MHD_stop_daemon (ms->server); }
 }
@@ -587,7 +602,7 @@ void server_run_wait_sigproc(miniserver * ms) {
 * (that should do respective dispatching if app handles many different actions).
 */
 int main (int argc, char *argv[]) {
-  int log = 0;
+  int logtofile = 0;
   if (argc < 2) { printf("No args, pass port. (e.g. %s 8181)\n", argv[0]); return 1; }
   int port = atoi(argv[1]);
   int daemon = 0;
@@ -605,15 +620,16 @@ int main (int argc, char *argv[]) {
   else { printf("Parsed JSON: %llu\n", (unsigned long long)json); }
   if (!daemon) { goto RUN; }
   pid_t pid = fork(); // Parent: Child pid returned, Child: 0 ret'd
+  if (pid < 0) { printf("Parent (PID: %d) exiting for failed fork (PID: %d) !!!\n", getpid(), pid); return 0;}
   if (pid) { printf("Parent (PID: %d) exiting for child daemon (PID: %d)\n", getpid(), pid); return 0; }
-  daemon_prep(); // In child only
+  daemon_prep(); // In child only (daemon && !pid)
   RUN:
   //////////// Separate (local) logging and PID saving from essentials of daemon_launch
-  log = 1;
+  logtofile = 1;
   char * logfn = "/tmp/procster.log";
   char * pidfn = "./procster.pid";
   FILE * fh = stdout;
-  if (log) { fh = fopen(logfn, "wb"); setbuf(fh, NULL); }
+  if (logtofile) { fh = fopen(logfn, "wb"); setbuf(fh, NULL); }
   // Refresh FD:s ? Systemd can capture output
   int piderr = savepid(json);
   //int piderr = savepid_simple(pidfn, getpid() );
@@ -626,9 +642,11 @@ int main (int argc, char *argv[]) {
   // OK" pidfn, possibly logfn, port
   miniserver * ms = calloc(1, sizeof (struct miniserver)); // server_new(json); // large JSON loading func in ms/miniserver.c
   ms->logfh = fh; ms->server = NULL; // Make daemon_launch return MHD server ?
+  if (logtofile) { ms->logfname = strdup(logfn); }
   // TODO: copy / inline here: server_run_wait_procster() ?
-  server_run_wait(ms); // microthhpd getchar() workarounds In ms/miniserver.c.
-  //server_run_wait_sigproc(ms);
+  fprintf(fh, "Starting server_run_wait()\n");
+  //server_run_wait(ms); // microthhpd getchar() workarounds In ms/miniserver.c.
+  server_run_wait_sigproc(ms);
   return 0;
 }
 
