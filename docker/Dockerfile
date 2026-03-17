@@ -1,4 +1,6 @@
 # docker build --rm=true -t 'procster:0.0.1' -f docker/Dockerfile .
+# docker buildx build -t procster:0.0.1-buildx --load -f docker/Dockerfile .
+# docker buildx build --platform linux/amd64,linux/arm64 -t myhost.lan:5000/procster:0.0.1-buildx --push -f docker/Dockerfile .
 # TEST_RUN:  docker run -it --rm --pid=host 'procster:0.0.1' sh
 # FINAL_RUN: docker run --rm -p 8181:8181  --pid=host 'procster:0.0.1'
 # ATTACH:    docker exec $CONTID sh
@@ -25,7 +27,8 @@ WORKDIR /root/
 RUN git clone https://github.com/ohollmen/procster.git
 #COPY ./ /root/procster
 WORKDIR /root/procster
-RUN make
+# for libproc2: make all2
+RUN make all
 # ENTRYPOINT ["/app/procster"]
 CMD bash
 
