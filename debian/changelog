@@ -1,0 +1,11 @@
+procster (0.0.1-1) unstable; urgency=medium
+
+  * Initial Debian packaging.
+  * Package the libproc2-based procster HTTP/JSON process service.
+  * Include systemd service unit and default configuration file.
+  * Document upstream usage, debugging, and deployment notes.
+  * Carry current upstream support for process listing, process trees,
+    process termination, and newer-distribution build targets.
+
+ -- Olli Hollmen <olli.hollmen@gmail.com>  Tue, 17 Mar 2026 17:00:00 -0700
+ 
