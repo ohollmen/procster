@@ -1,0 +1,11 @@
+#!/usr/bin/make -f
+
+%:
+	dh $@
+# Tells the build system (explicitly) what to do during the "build" phase.
+# e.g. here run your specific target instead of the default 'make'
+override_dh_auto_build:
+	make all2
+
+override_dh_auto_install:
+	make install DESTDIR=$(CURDIR)/debian/tmp
