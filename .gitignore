@@ -23,3 +23,5 @@ procster.service
 *.o
 ms
 errors.json
+proc2server
+procutil2
