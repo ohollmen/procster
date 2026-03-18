@@ -1,0 +1,30 @@
+Source: procster
+Section: admin
+Priority: optional
+Maintainer: Olli Hollmen <olli.hollmen@gmail.com>
+Rules-Requires-Root: no
+Build-Depends:
+ debhelper-compat (= 13),
+ gcc,
+ make,
+ pkgconf,
+ libjansson-dev,
+ libmicrohttpd-dev,
+ libglib2.0-dev,
+ libproc2-dev
+Standards-Version: 4.7.0
+Homepage: https://github.com/ohollmen/procster
+
+Package: procster
+Architecture: any
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ adduser
+Description: HTTP/JSON service for listing and managing Linux processes
+ Procster is a small HTTP service and CLI utility for exposing Linux
+ process information as JSON.
+ .
+ It can return flat process listings and process trees, and also supports
+ terminating processes by PID. It is intended for local or intranet-style
+ administration and automation.
