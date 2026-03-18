@@ -69,6 +69,10 @@ jobs:
           ./proc2server 8001 --daemon
           sleep 5
           make test
+      - name: Install Debian packaging utilities
+        run: package_deps
+      - name: Package the App as .deb
+        run: make package
       # Note: We could test here immediately and prevent the need to store
       # artifacts. These are (in practice) mutually exclusive
       #- name: Run tests
