@@ -24,6 +24,11 @@ GLIB_LIBS=`pkg-config --libs glib-2.0`
 MUSTACHE=./node_modules/mustache/bin/mustache
 EXESUFF=
 IMG_VER=0.0.3
+DESTDIR ?= /tmp/procster
+PREFIX ?= /usr
+SBINDIR ?= $(PREFIX)/sbin
+SYSCONFDIR ?= /etc
+INSTALL ?= install
 all: libs main
 all2: libs2 main2
 
@@ -124,3 +129,10 @@ cppcheck:
 image:
 	docker build --rm=true -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
 	echo "Test: docker run --rm -p 8181:8181  --pid=host 'procster:$(IMG_VER)'"
+# Note: Per debian standards there would need to be a make CLI var DESTDIR (make install DESTDIR=debian/tmp),
+# which dh_auto_install would pass to make install target as e.g. debian/tmp, see above example)
+install: all2
+	$(INSTALL) -d $(DESTDIR)$(SBINDIR)
+	$(INSTALL) -d $(DESTDIR)$(SYSCONFDIR)/procster
+	$(INSTALL) -m 0755 proc2server $(DESTDIR)$(SBINDIR)/proc2server
+	$(INSTALL) -m 0644 procster.conf.json $(DESTDIR)$(SYSCONFDIR)/procster/procster.conf.json
