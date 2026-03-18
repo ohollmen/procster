@@ -615,9 +615,21 @@ int main (int argc, char *argv[]) {
   /////////////////////////////////////////////////////////
   json_error_t error = {0};
   /* the error variable contains error information */
-  json_t * json = json_load_file("./procster.conf.json", 0, &error);
-  if (!json) { printf("JSON parsing error: %s\n", error.text); }
-  else { printf("Parsed JSON: %llu\n", (unsigned long long)json); }
+  char homeconfig[256] = {0};
+  snprintf(homeconfig, 255, "%s/procster.conf.json", getenv("HOME") ?  getenv("HOME"): "/tmp");
+  char * configlocs[] = {"/etc/procster/procster.conf.json", homeconfig, "./procster.conf.json", NULL};
+  char * cfgfn = NULL;
+  json_t * json = NULL;
+  for (int i = 0;configlocs[i];i++) {
+    cfgfn = configlocs[i];
+    if (access(cfgfn, F_OK) != 0) { cfgfn = NULL; continue; }
+    
+    json = json_load_file(cfgfn, 0, &error);
+    if (!json) { printf("JSON parsing error: %s\n", error.text); cfgfn = NULL; continue; }
+    else { printf("Parsed JSON: %llu\n", (unsigned long long)json); break; }
+  }
+  if (!cfgfn) { printf("Could not find procster.conf.json from any of the locations.\n"); return 3; }
+  printf("Running based on config file from: '%s'\n", cfgfn);
   if (!daemon) { goto RUN; }
   pid_t pid = fork(); // Parent: Child pid returned, Child: 0 ret'd
   if (pid < 0) { printf("Parent (PID: %d) exiting for failed fork (PID: %d) !!!\n", getpid(), pid); return 0;}
