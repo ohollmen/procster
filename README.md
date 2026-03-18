@@ -66,19 +66,19 @@ Install dependencies (e.g):
 ```
 #### Ubuntu 18.04 ####
 # For Processlister ... (procps 3.3.12, jansson 2.11)
-sudo apt-get install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
+sudo apt install -y libprocps6 libprocps-dev libjansson4 libjansson-dev
 # Glib runtime + ...-dev (headers)
-sudo apt-get install -y libglib2.0-0 libglib2.0-dev
+sudo apt install -y libglib2.0-0 libglib2.0-dev
 # For Microhttpd
-sudo apt-get install -y libmicrohttpd12 libmicrohttpd-dev
-sudo apt-get install -y libglib2.0-0 libglib2.0-dev
+sudo apt install -y libmicrohttpd12 libmicrohttpd-dev
+sudo apt install -y libglib2.0-0 libglib2.0-dev
 #### Ubuntu 24.04 ####
 # (Note: libproc2-dev has headers, static and dyn. libs !)
 # Seems libproc2 uses libproc2/pids.h to replace proc/readproc.h (!)
-sudo apt-get install -y libproc2-dev libjansson4 libjansson-dev
-sudo apt-get install -y libglib2.0-0t64 libglib2.0-dev
+sudo apt install -y libproc2-dev libjansson4 libjansson-dev
+sudo apt install -y libglib2.0-0t64 libglib2.0-dev
 # For Microhttpd
-sudo apt-get install -y libmicrohttpd12t64 libmicrohttpd-dev
+sudo apt install -y libmicrohttpd12t64 libmicrohttpd-dev
 ```
 For static linking you may additionally need:
 ```
