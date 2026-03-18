@@ -24,7 +24,8 @@ GLIB_LIBS=`pkg-config --libs glib-2.0`
 MUSTACHE=./node_modules/mustache/bin/mustache
 EXESUFF=
 IMG_VER=0.0.3
-DESTDIR ?= /tmp/procster
+#  /tmp/procster. Empty here means things go directly to OS install locations.
+DESTDIR ?=
 PREFIX ?= /usr
 SBINDIR ?= $(PREFIX)/sbin
 SYSCONFDIR ?= /etc
@@ -98,7 +99,10 @@ clean:
 test:
 	# -d "data"
 	#curl -X POST -H "Content-Type: application/json" --data-binary @test.json --output - http://localhost:8001/json
-	curl http://localhost:8001/proclist
+	./proc2server 8181 --daemon && sleep 2
+	#
+	curl http://localhost:8181/proclist | grep proc2server
+	kill `cat procster.pid`
 test2:
 	curl -X POST -H "Content-Type: application/x-www-form-urlencoded" --data-binary "k1=v1&k2=v2" http://localhost:8001/encoded
 ulf:
@@ -127,7 +131,8 @@ covmodel:
 cppcheck:
 	cppcheck -i json_example.c -i ulftest.c .
 image:
-	docker build --rm=true -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
+	# docker build --rm=true -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
+	docker buildx build --load -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
 	echo "Test: docker run --rm -p 8181:8181  --pid=host 'procster:$(IMG_VER)'"
 # Note: Per debian standards there would need to be a make CLI var DESTDIR (make install DESTDIR=debian/tmp),
 # which dh_auto_install would pass to make install target as e.g. debian/tmp, see above example)
@@ -136,3 +141,20 @@ install: all2
 	$(INSTALL) -d $(DESTDIR)$(SYSCONFDIR)/procster
 	$(INSTALL) -m 0755 proc2server $(DESTDIR)$(SBINDIR)/proc2server
 	$(INSTALL) -m 0644 procster.conf.json $(DESTDIR)$(SYSCONFDIR)/procster/procster.conf.json
+# Install dependencies for libproc2 (modern) version
+deps2:
+	sudo apt update
+	sudo apt install -y libproc2-dev libjansson4 libjansson-dev libglib2.0-0t64 libglib2.0-dev libmicrohttpd12t64 libmicrohttpd-dev --no-install-recommends
+package_deps:
+	sudo apt install build-essential devscripts debhelper dh-make
+package:
+	# For bootstrapping package creation, use plain
+	# dpkg-buildpackage -us -uc
+	# Binary package
+	dpkg-buildpackage -b -us -uc
+	# Build with debuild if you use devscripts
+	# debuild -us -uc
+	# Inspect contents
+	# dpkg-deb -c ../procster_*.deb
+	# Inspect package info / metadata
+	# dpkg-deb -I ../procster_*.deb
