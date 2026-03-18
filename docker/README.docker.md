@@ -176,3 +176,16 @@ docker manifest create your-repo/image:clean your-repo/image@sha256:e91475835fc0
 docker manifest annotate your-repo/image:clean your-repo/image@sha256:e91475835fc01b593b7e97f73b47487c37c1a5e0e1ef15b589b7f8538feed5fb --os linux --arch amd64
 ```
 `docker buildx build ...` accepts a flag `--provenance=false` (Provenance Attestations)
+
+## Attertations, provenance
+
+See and read:
+- Google (AI): what is provenance in docker context ?
+  - Source Information: Git repo URL, commit SHA
+  - Build Environment: Build system (GitHub Actions, BuildKit), platform (OS, Arch) and timestamps
+  - Build Inputs: External materials: Base images, their digest
+  - Build Process: exact steps or "invocation", full Dockerfile
+  - Provenance (`--provenance=...`): 
+- Build attestations: https://docs.docker.com/build/metadata/attestations/
+- aligns with the SLSA (Supply-chain Levels for Software Artifacts) framework
+- in-toto JSON format
