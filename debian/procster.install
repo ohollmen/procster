@@ -1,0 +1,5 @@
+proc2server usr/sbin/
+procster.conf.json etc/procster/
+debian/procster.service lib/systemd/system/
+README.md usr/share/doc/procster/
+README.debugging.md usr/share/doc/procster/
