@@ -70,7 +70,7 @@ jobs:
           sleep 5
           make test
       - name: Install Debian packaging utilities
-        run: package_deps
+        run: make package_deps
       - name: Package the App as .deb
         run: make package
       # Note: We could test here immediately and prevent the need to store
