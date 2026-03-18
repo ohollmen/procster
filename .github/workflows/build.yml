@@ -100,7 +100,7 @@ jobs:
   # Build procster app image (NOT build image) and push to GH container registry
   # This depends on top-level perms: contents: read, packages: write
   image_job:
-    name: Build docker image
+    name: Build Docker image
     # if: github.ref == 'b'
     runs-on: ubuntu-latest
     steps:
@@ -130,7 +130,7 @@ jobs:
           context: .
           file: ./docker/Dockerfile
           # linux/amd64,linux/arm64
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
           # Pass variables to Dockerfile ARG directives (e.g. version)
