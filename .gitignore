@@ -25,6 +25,8 @@ ms
 errors.json
 proc2server
 procutil2
+.env
+.kateproject.ctags
 # Coverity Static Analysis
 cov-int/
 procster.tar.xz
