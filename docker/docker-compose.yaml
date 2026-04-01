@@ -1,0 +1,18 @@
+# Note: Docker automatically pulls correct architecture image (e.g. ARM64 version if your server is ARM64)
+services:
+  procster:
+    # Injected from .env
+    # image: ${IMAGE_NAME}:latest
+    image: ghcr.io/ohollmen/procster:latest
+	# environment:
+	# - ENV_KEY=ENV_VALUE
+    container_name: procster
+    restart: always
+    ports:
+      - "8181:8181"
+    # Check: .State.Health.Status (Also: .State.Status)
+    #healthcheck:
+    #  test: ["CMD", "curl", "-f", "http://localhost:8181/health"]
+    #  interval: 30s
+    #  timeout: 10s
+    #  retries: 3

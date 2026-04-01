@@ -1,0 +1,38 @@
+# # Run / Stop Pod definition w. Podman
+# 
+# - podman play kube procster.pod.yaml
+# - podman kube down procster.pod.yaml
+# 
+# # Generate Pod definition from docker-compose
+# 
+# - Start up docker-compose app: podman-compose up -d
+# - Generate Pod def w. podman: podman generate kube my-app-stack > pod.yaml
+# - Stop old compose app: podman-compose down
+# - Start new Pod w. podman: podman play kube pod.yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: procster
+spec:
+  hostPID: true
+  containers:
+  - name: procserver
+    image: ghcr.io/ohollmen/procster:latest
+    ports:
+    - containerPort: 8181
+      hostPort: 8181
+    env:
+    # Containers share localhost!
+    - name: SIDECAR_SERV_HOST
+      value: "localhost"
+    # Optional: often required for tools that need to inspect host PIDs
+    #securityContext:
+    #  privileged: true
+    capabilities:
+        drop:
+          - ALL
+        add:
+          - SYS_PTRACE  # Allows process tracing/signaling
+          - SYS_ADMIN   # Optional: needed for some advanced host interactions
+  #- name: serv2
+  #  image: serv2:alpine
