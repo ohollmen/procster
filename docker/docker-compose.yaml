@@ -4,6 +4,8 @@ services:
     # Injected from .env
     # image: ${IMAGE_NAME}:latest
     image: ghcr.io/ohollmen/procster:latest
+	# Host pids !!!
+	pid: host
 	# environment:
 	# - ENV_KEY=ENV_VALUE
     container_name: procster
