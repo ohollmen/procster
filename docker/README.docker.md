@@ -189,3 +189,51 @@ See and read:
 - Build attestations: https://docs.docker.com/build/metadata/attestations/
 - aligns with the SLSA (Supply-chain Levels for Software Artifacts) framework
 - in-toto JSON format
+
+## ghcr.io Access and Auth
+
+Creation and usage of GitHub Personal Access tokens
+
+- Local terminal push/pull requires Hithub Personal Access Token (classic) w. write:packages and read:packages scopes
+- Creation: Profile pic => Settings => Developer Settings (near the bottom) => Personal access tokens
+- Actions (CI/CD) flow: Use secrets.GITHUB_TOKEN - is dynamic, temporary, automatic, per repo
+  - associated, runner of actions: github.actor
+- Currently, Fine-grained tokens do not support GitHub Packages (GHCR)
+
+Workflow from terminal:
+```
+# Login (could store in ~/.bashrc). Other names CR_PAT, GH_PAT
+export GHCR_PAT=YOUR_TOKEN_HERE
+echo $GHCR_PAT | docker login ghcr.io -u YOUR_GITHUB_USERNAME --password-stdin
+# Build/Push
+docker build --tag ghcr.io/jsmith/theproject:latest .
+docker push ghcr.io/jsmith/theproject:latest
+# Deploy to K8S (deployment.yaml should refer to ...:latest image)
+kubectl --kubeconfig ~/.kube/config apply -f docker/deployment.yaml
+```
+
+## Linking image to repo
+
+- A: Use GITHUB_TOKEN on push (Automatic linking to repo that ran the workflow), `${{ secrets.GITHUB_TOKEN }}` on push) - Actions CI Only
+- B: Add a Label to your Dockerfile (Best Practice): `LABEL org.opencontainers.image.source="https://github.com"` - works regardless of how you push (local or CI)
+- C: Manual Link in GitHub GUI: Profile > Packages (Select your container image) => (right sidebar, click) Package settings => Scroll down to Connect Repository and search for your repo
+
+## Swapping to use crun instead of runc
+
+Edit /etc/docker/daemon.json and run `sudo systemctl restart docker`;
+```
+{
+  "default-runtime": "crun",
+  "runtimes": {
+    "crun": {
+      "path": "/usr/bin/crun"
+    }
+  }
+}
+```
+
+Benchmark:
+```
+docker run --rm -d --name test-crun alpine sleep 10
+docker inspect test-crun | grep -i "Runtime"
+```
