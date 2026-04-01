@@ -1,0 +1,14 @@
+{
+    "name": "Procster - view process info over the network.",
+    "files": [ { "git": 1 } ],
+    "build": {
+      "directory": ".",
+      "build": "make all2",
+      "clean": "make clean"
+    },
+    "ctags": {
+      "enable": true,
+      "index_file": ".kateproject.ctags",
+      "options": "--languages=C"
+    }
+}

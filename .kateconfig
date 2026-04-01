@@ -1,0 +1,5 @@
+kate: indent-width 2; replace-tabs on; newline-at-eof on;
+
+# Specific rules for different file types:
+kate-wildcard(*.py): indent-width 2; indent-mode python;
+kate-wildcard(*.js): indent-width 2;
