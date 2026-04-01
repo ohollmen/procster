@@ -30,6 +30,8 @@ PREFIX ?= /usr
 SBINDIR ?= $(PREFIX)/sbin
 SYSCONFDIR ?= /etc
 INSTALL ?= install
+LAST_SHA := $(shell git rev-parse --short HEAD)
+# .ONESHELL:
 all: libs main
 all2: libs2 main2
 
@@ -56,9 +58,9 @@ libs:
 libs2:
 	# .o Object w/o main() -ljansson -lproc2
 	gcc  -c procutil2.c -o procutil2.o `pkg-config --cflags glib-2.0`
-	# TESTMAIN For CLI
-	gcc -DTESTMAIN=1  -o procutil2 procutil2.c -ljansson -lproc2 `pkg-config --cflags glib-2.0` -lglib-2.0
-	ls -al procutil2*
+	# TESTMAIN For CLI. cov-build does not like this 2nd compile of procutil2.c
+	#gcc -DTESTMAIN=1  -o procutil2 procutil2.c -ljansson -lproc2 `pkg-config --cflags glib-2.0` -lglib-2.0
+	#ls -al procutil2*
 main:
 	# Compile http server (procserver) file, link w. libs later
 	$(CC) -c procserver.c `pkg-config --cflags glib-2.0`
@@ -69,7 +71,7 @@ main:
 	# Original slim / prurpose-build exe) w/o procserver2.o ms/miniserver.a
 	# Note: redundant libs: -ldl -lpcre (libsystemd.so.0 ???). Indirect deps (Even not having them here adds them as dependency) ?
 	$(CC) $(LDFLAGS) -o procserver procserver.o  proclist.o procutil.o proctree.o -lprocps $(LIBS_COMPACT) `pkg-config --libs glib-2.0`
-	echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
+	#echo "Run (e.g.) by passing PORT: ./procserver$(EXESUFF) 8181"
 # Main for libproc2
 main2:
 	# TODO: Pass -DPROC2 to choose the ifdef's for libproc2 based calls in procserver.c
@@ -95,7 +97,8 @@ objclean:
 	rm -f proclist.o proctree.o procutil.o proclist_main.o procserver.o
 	#rm -f  *.o
 clean:
-	rm -f procserver procs  ulftest ms_test *.o
+	rm -f procserver procs procutil2 proc2server ulftest ms_test *.o
+	rm -rf ./cov-int/*
 test:
 	# -d "data"
 	#curl -X POST -H "Content-Type: application/json" --data-binary @test.json --output - http://localhost:8001/json
@@ -127,6 +130,18 @@ covmodel:
 	# -I/usr/include/glib-2.0/ $(GLIB_CFLAGS)
 	gcc -c conf/covmodels.c `pkg-config --cflags glib-2.0`
 	echo "Test Compiled Model"
+covintpack:
+	# Removed "v" for time stats. gz: 0.22s 1.9MB, xz 1.97 s 1.1MB
+	#time tar -czf procster.tar.gz cov-int
+	time tar -caf procster.tar.xz  cov-int
+	#ls -al procster.tar.gz procster.tar.xz
+covintupload:
+	# LAST_SHA is now extracted at the Makefile top
+	# LAST_SHA=$$(git rev-parse HEAD);
+	echo "About to upload commit/version $(LAST_SHA)"; \
+	curl --form token="$$PROCSTER_SCAN_TOK" --form email="$$PROCSTER_SCAN_EMAIL" --form file=@procster.tar.xz \
+	  --form version="$(LAST_SHA)" --form description="Procster Coverity Analysis" \
+	  https://scan.coverity.com/builds?project=ohollmen%2Fprocster
 # Relies on presence of "cppcheck"
 cppcheck:
 	cppcheck -i json_example.c -i ulftest.c .
