@@ -1,0 +1,54 @@
+name: coverity-scan
+#on:
+#  push:
+#    branches: [ "main" ] # Or your default branch
+# Manual trigger
+on:
+  workflow_dispatch:
+
+jobs:
+  covscan:
+    name: Scan procster with Coverity (static analysis)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Manual Trigger Debug Step
+        if: github.event_name == 'workflow_dispatch'
+        run: echo "This only runs during a manual trigger"
+      - name: Checkout/Clone Code
+        uses: actions/checkout@v4
+      - name: Install dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y build-essential cmake
+          sudo apt install -y libproc2-dev libjansson4 libjansson-dev libglib2.0-0t64 libglib2.0-dev libmicrohttpd12t64 libmicrohttpd-dev
+      # Make sure secrets.COVERITY_SCAN_TOKEN is stored/available !
+      - name: Download Coverity Build Tool (cov-build)
+        # Download link on site (GET): https://scan.coverity.com/download/cxx/linux64
+        # Natural name as downloaded from site: cov-analysis-linux64-2024.12.1.tar.gz
+        # Size of .tar.gz: 1.2 GB
+        # Number of files: 15370
+        # Other: tar xzf => .tgz, tar caf => tar.xz (or .bz2, .lzma)
+        run: |
+          wget https://scan.coverity.com/download/linux64 \
+            --post-data "token=${{ secrets.COVERITY_SCAN_TOKEN }}&project=${{ github.repository }}" \
+            -O coverity_tool.tgz
+          mkdir coverity_tool
+          tar xzf coverity_tool.tgz --strip 1 -C coverity_tool
+      - name: Build with cov-build
+        # Pass also(?): --config covint/coverity_config.xml
+        # Intermed: Must be named cov-int (Not e.g. covint) - scan.coverity.com is firm about this.
+        run: |
+          export PATH=$PWD/coverity_tool/bin:$PATH
+          cov-build --dir cov-int make
+
+      - name: Submit results to Coverity Scan
+        # Create .tgz, of cov-int (only), upload w. curl (2F=/). --form triggers multipart POST.
+        # See (e.g.): https://scan.coverity.com/projects/orguser-projname/builds/new
+        run: |
+          tar czvf ${{ github.event.repository.name }}.tgz cov-int
+          curl --form token=${{ secrets.COVERITY_SCAN_TOKEN }} \
+            --form email=my.email@gmail.com \
+            --form file=@results.tgz \
+            --form version="${{ github.sha }}" \
+            --form description="${{ github.event.repository.name }} GitHub Actions Coverity build." \
+            https://scan.coverity.com/builds?project=${{ github.repository_owner }}%2F${{ github.event.repository.name }}
