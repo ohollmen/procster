@@ -147,8 +147,16 @@ cppcheck:
 	cppcheck -i json_example.c -i ulftest.c .
 image:
 	# docker build --rm=true -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
-	docker buildx build --load -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
+	docker buildx build -t 'procster:$(IMG_VER)' --load -f docker/Dockerfile .
 	echo "Test: docker run --rm -p 8181:8181  --pid=host 'procster:$(IMG_VER)'"
+# Notes on buildkit / buildx was of storing image:
+# --load - load to local docker daemon, do a separate push step after
+# --push - do direct push at the end of the build (w/o separate docker push ...)
+# For now use :latest (not :$(IMG_VER) )
+# Also: --platform linux/amd64,linux/arm64 but arm64 needs builder installations (See README.docker.md)
+# Note: GitHub Actions does not need this target - it has a built-in action w (effectively below) params to do it.
+#image_ghcr:
+#	docker buildx build --platform linux/amd64 -t 'ghcr.io/ohollmen/procster:latest' --push -f docker/Dockerfile .
 # Note: Per debian standards there would need to be a make CLI var DESTDIR (make install DESTDIR=debian/tmp),
 # which dh_auto_install would pass to make install target as e.g. debian/tmp, see above example)
 install: all2
