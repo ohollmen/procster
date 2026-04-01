@@ -31,6 +31,7 @@ SBINDIR ?= $(PREFIX)/sbin
 SYSCONFDIR ?= /etc
 INSTALL ?= install
 LAST_SHA := $(shell git rev-parse --short HEAD)
+#-include .env
 # .ONESHELL:
 all: libs main
 all2: libs2 main2
@@ -135,7 +136,7 @@ covintpack:
 	#time tar -czf procster.tar.gz cov-int
 	time tar -caf procster.tar.xz  cov-int
 	#ls -al procster.tar.gz procster.tar.xz
-covintupload:
+covintupload: covintpack
 	# LAST_SHA is now extracted at the Makefile top
 	# LAST_SHA=$$(git rev-parse HEAD);
 	echo "About to upload commit/version $(LAST_SHA)"; \
@@ -145,6 +146,10 @@ covintupload:
 # Relies on presence of "cppcheck"
 cppcheck:
 	cppcheck -i json_example.c -i ulftest.c .
+# apt install universal-ctags
+# kate default: ctags -R --c++-types=+px --extra=+q --excmd=pattern --exclude=Makefile --exclude=.
+ctags:
+	ctags -R --fields=+nKSt --extras=+q --excmd=number -f .kateproject.ctags .
 image:
 	# docker build --rm=true -t 'procster:$(IMG_VER)' -f docker/Dockerfile .
 	docker buildx build -t 'procster:$(IMG_VER)' --load -f docker/Dockerfile .
