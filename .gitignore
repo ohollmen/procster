@@ -25,3 +25,6 @@ ms
 errors.json
 proc2server
 procutil2
+# Coverity Static Analysis
+cov-int/
+procster.tar.xz
