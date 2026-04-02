@@ -147,7 +147,8 @@ struct pstreenode {
 };
 PSN * psn_new(int pid) { // json_t * proc_j
   PSN * psn = (PSN*)calloc(1, sizeof(PSN));
-  psn->pid = pid;
+  if (!psn) { return NULL; }
+  psn->pid = pid; // Can be 0 (OK)
   //if (proc_j) { psn->proc_j = proc_j; } // NOTHERE: proc_to_json(proc2, info, NULL); NOTE: info ????
   //else {
   //psn->proc_j = json_object(); // Empty
@@ -155,13 +156,17 @@ PSN * psn_new(int pid) { // json_t * proc_j
   // AUTO: psn->children = NULL;
   return psn;
 }
-void * psn_add_child(PSN * psn, PSN * child) {
+/** Add child process to parent's parent.children collection of child processes.
+ * @param psn - Parent process node
+ * @param child - child process not to add to parent's collection of children
+ */
+void psn_add_child(PSN * psn, PSN * child) {
   // psn->children = g_slist_append((GSList*)psn->children, child); // NOT Needed
   // Both Should also have JSON by now
   if (psn->proc_j && child->proc_j) {
     json_t * arr = NULL;
-    // Already has JSON "children"
-    if (arr = json_object_get(psn->proc_j, "children")) { }
+    // Already has JSON "children" ? Extra parens to please CFLAGS = -Wall
+    if ( (arr = json_object_get(psn->proc_j, "children")) ) { }
     else {
       arr = json_array();
       json_object_set_new_nocheck(psn->proc_j, "children", arr);
@@ -192,7 +197,9 @@ json_t* proc2_tree(struct pids_info *info, struct pids_fetch * fetch_result) {
   if (!ht) { printf("GHashTable allocation failure !\n"); return NULL; }
   GSList * list = NULL; // Container/List for unresolved parents
   // Setup process 0 (object) as root of tree
-  PSN * p0 = psn_new(0); p0->ppid = 0; p0->proc_j = json_object(); // Set JSON attrs
+  PSN * p0 = psn_new(0);
+  if (!p0) { printf("PSN-0 (root process node) allocation failure !\n"); return NULL; }
+  p0->ppid = 0; p0->proc_j = json_object(); // Set JSON attrs
   json_object_set_new_nocheck(p0->proc_j, "cmdline",  json_string ("vmlinux"));
   for (int i = 0; i < totcnt; i++) {
     // Where to "hold" PS-children ? hashtable keyed by integer-PID ?
@@ -200,6 +207,7 @@ json_t* proc2_tree(struct pids_info *info, struct pids_fetch * fetch_result) {
     int pid  = PIDS_VAL(0, s_int, proc2, info);
     int ppid = PIDS_VAL(2, s_int, proc2, info); // idx 2
     PSN * psn = psn_new(pid); // psn->ppid = ppid;
+    if (!psn) { psn_free(p0); return NULL; } // All-or-nothing. Should release whole tree !?
     // Populate json, assign
     psn->proc_j = proc_to_json(proc2, info, ""); // last: cmdline
     //g_hash_table_insert(ht, GINT_TO_POINTER(psn->pid), psn);
@@ -238,9 +246,9 @@ json_t* proc2_tree(struct pids_info *info, struct pids_fetch * fetch_result) {
   return root;
 }
 // Not needed ?
-json_t * ptree_json(PSN * psn) {
-  
-}
+//json_t * ptree_json(PSN * psn) {
+//
+//}
 /** List processes with libproc2 API .
 - set up the fields
 - 
