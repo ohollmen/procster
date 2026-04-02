@@ -15,8 +15,8 @@ LIBS_STATIC=-lglib-2.0     -lz -lnettle -lhogweed -ltasn1      -lgmp -lidn2 -lun
 # `pkg-config --libs glib-2.0`
 
 # For Ulfius apps /usr/include/ulfius.h
-# -I$(EXAMPLE_INCLUDE)
-CFLAGS+=-c -Wall -I$(ULFIUS_INCLUDE)  -D_REENTRANT $(ADDITIONALFLAGS) $(CPPFLAGS)
+# -I$(EXAMPLE_INCLUDE) Optim: -O0 Static analysis: -fanalyzer  -I$(ULFIUS_INCLUDE)
+CFLAGS+=-c -Wall   -D_REENTRANT $(ADDITIONALFLAGS) $(CPPFLAGS)
 LDFLAGS=-export-dynamic -rdynamic
 # Ubuntu with pkg-config
 GLIB_CFLAGS=`pkg-config --cflags --libs glib-2.0`
@@ -31,6 +31,10 @@ SBINDIR ?= $(PREFIX)/sbin
 SYSCONFDIR ?= /etc
 INSTALL ?= install
 LAST_SHA := $(shell git rev-parse --short HEAD)
+ifeq ($(analyze), 1)
+  CFLAGS += -fanalyzer -O0
+  $(info >>> Static Analysis Enabled <<<)
+endif
 #-include .env
 # .ONESHELL:
 all: libs main
@@ -58,13 +62,13 @@ libs:
 # Libs target for libproc2
 libs2:
 	# .o Object w/o main() -ljansson -lproc2
-	gcc  -c procutil2.c -o procutil2.o `pkg-config --cflags glib-2.0`
+	gcc $(CFLAGS) -c procutil2.c -o procutil2.o `pkg-config --cflags glib-2.0`
 	# TESTMAIN For CLI. cov-build does not like this 2nd compile of procutil2.c
 	#gcc -DTESTMAIN=1  -o procutil2 procutil2.c -ljansson -lproc2 `pkg-config --cflags glib-2.0` -lglib-2.0
 	#ls -al procutil2*
 main:
 	# Compile http server (procserver) file, link w. libs later
-	$(CC) -c procserver.c `pkg-config --cflags glib-2.0`
+	$(CC) $(CFLAGS) -c procserver.c `pkg-config --cflags glib-2.0`
 	#OLD:$(CC) -o procserver procserver.c proctest.o $(LIBS)
 	# Link ! $(EXESUFF)
 	# Hybrid (old procserver.o w/o main and procserver2.o w. main !!!)
@@ -76,7 +80,7 @@ main:
 # Main for libproc2
 main2:
 	# TODO: Pass -DPROC2 to choose the ifdef's for libproc2 based calls in procserver.c
-	$(CC) -DPROC2 -c procserver.c `pkg-config --cflags glib-2.0`
+	$(CC) $(CFLAGS) -DPROC2 -c procserver.c `pkg-config --cflags glib-2.0`
 	# Must have libs ... Cannot link: procutil.o
 	$(CC) $(LDFLAGS) -o proc2server procserver.o  procutil2.o -lproc2 $(LIBS_COMPACT) `pkg-config --libs glib-2.0`
 	echo "Run (e.g.) by passing PORT: ./proc2server$(EXESUFF) 8181"
