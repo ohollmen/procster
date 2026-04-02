@@ -146,7 +146,7 @@ void daemon_prep() {
   // Leave open 0,1,2
   // open_max(); // ?
   for (int i=3;i<r.rlim_cur;i++) { close(i); }
-  printf("daemon_prep(): Closed files (>=3 .. %d), Turn output off 1,2\n", r.rlim_cur); // r.rlim_max (Do NOT USE) / r.rlim_cur
+  printf("daemon_prep(): Closed files (>=3 .. %lu), Turn output off on fd 0,1,2\n", r.rlim_cur); // r.rlim_max (Do NOT USE) / r.rlim_cur
   //return;
   // 0,1,2: stdin, stdout, stderr
   int fd1 = open("/dev/null", O_RDWR);
@@ -154,7 +154,9 @@ void daemon_prep() {
   dup2(fd1, STDIN_FILENO); // Extra trial. With getchar() if this (fd=0, stdin) is dup2()d, There's immediate exit - ! EOF !
   dup2(fd1, STDOUT_FILENO); // 1 - STDOUT_FILENO
   dup2(fd1, STDERR_FILENO); // 2 - STDERR_FILENO
-  if (fd1 > 2) { close(fd1); }
+  //if (fd1 > STDERR_FILENO) {
+    close(fd1);
+  //} // Old: 2
   
 }
 /////// In (New) framework: Set this in hook ... ///////
@@ -319,10 +321,12 @@ if (!*con_cls) {
 struct MHD_Response * trystatic(const char * url) {
   char urlfile[256] = {0};
   if (!strcmp(url, "/")) { url = "/index.html"; }
-  sprintf(urlfile, "%s/%s", docroot, (char*)url);
+  int wrote = snprintf(urlfile, 255, "%s/%s", docroot, (char*)url);
+  if (wrote > 255) { return NULL; }
   printf("Try static file: %s\n", urlfile);
-  int acc = access( urlfile, F_OK );
-  if (acc == -1) { printf("No access to %s\n", urlfile); return 0; }
+  // TOCTOU - Time of check, time of use problem. Work with open() only (eliminate access()).
+  //int acc = access( urlfile, F_OK );
+  //if (acc == -1) { printf("No access to %s\n", urlfile); return NULL; }
   int fd = open(urlfile, O_RDONLY);
   if (fd < 0) { return 0; }
   struct stat statbuf = {0};
@@ -359,13 +363,14 @@ int basic_creds_ok(struct MHD_Connection *connection) {
 
 /** MHD Response handler for creating OS Process listing.
 * Provides an example of simple GET handling of HTTP Request.
+* Note: size_t *upload_data_size type fixed to long unsigned int * (compiled, but warned)
 */
 int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
-    const char *upload_data, size_t *upload_data_size, void **con_cls) {
+    const char *upload_data, long unsigned int *upload_data_size, void **con_cls) {
   // const char *page  = "<html><body>Hello, browser!</body></html>";
   struct MHD_Response * response = NULL;
-  int ret; // = MHD_YES;
+  int ret; // = MHD_YES; // See: /usr/include/microhttpd.h => MHD_NO = 0, MHD_YES = 1
   int memmode = MHD_RESPMEM_PERSISTENT; // enum MHD_ResponseMemoryMode (MHD_RESPMEM_*: PERSISTENT, MUST_FREE, MUST_COPY )
   char * ctype = "text/plain";
   char * page = NULL;
@@ -377,6 +382,22 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   printf("URL(%s): %s\n", method, url);
   int ok = 0; // Must be early to not "pass initialization" (cov)
   int httpcode = MHD_HTTP_OK;
+  // Check headers for auth
+  /*
+  char * authtoken = "secret-123"; // Get from ...
+  if (*con_cls == NULL) {
+    const char *token = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "x-api-token");
+    if (token == NULL || strcmp(token, authtoken)) {
+      struct MHD_Response *response = MHD_create_response_from_buffer(12, "Unauthorized", MHD_RESPMEM_PERSISTENT);
+      enum MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_UNAUTHORIZED, response);
+      MHD_destroy_response(response);
+      return ret; // Terminate early
+    }
+    // Mark as "Authorized" so we don't re-check headers on next calls for this req.
+    *con_cls = (void*)1; // con_cls not used (for useful things) in this handler.
+    return MHD_YES;
+  }
+  */
   // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
   if ( !strcmp(url, "/proclist")) {
     //
@@ -468,7 +489,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   QUEUE_REQUEST:
   ret = MHD_queue_response (connection, httpcode, response);
   // if (ret != MHD_YES) { } // Don't check, just return (per examples, see below)
-  
+  printf("MHD_queue_response(): ret=%d for %s %s\n", ret, method, url);
   if (response) { MHD_destroy_response(response); } // Model ?
   return ret;
 }
@@ -525,7 +546,7 @@ void daemon_launch(int port, json_t * json) {
   int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD; 
   struct MHD_Daemon * mhd = MHD_start_daemon (flags, port, NULL, NULL,
     // NOTE: Connection handler: answer_to_connection*
-    &answer_to_connection0, NULL,
+    (MHD_AccessHandlerCallback)&answer_to_connection0, NULL,
     MHD_OPTION_NOTIFY_COMPLETED,
     NULL, NULL, // req_term_cb, userdata MHD Manual p. 18 ()
     
@@ -553,11 +574,12 @@ void daemon_launch(int port, json_t * json) {
 }
 // Loaner from external fw to let MHD run as persistent server 
 void server_run_wait(miniserver * ms) {
-  int c; int ccnt = 0;
+  // int c; int ccnt = 0; // Legacy loop vars
   FILE * lfh = ms->logfh; // ms->logfh / stderr
+  // if (!lfh) { return; }
   //setbuf(stdin, NULL);
-  fprintf(lfh, "Coming to pause()\n");
-  pause();
+  if (lfh) fprintf(lfh, "Coming to pause()\n");
+  pause(); // man 2 pause
   /*
   while (c = getchar()) {
     ccnt++;
@@ -566,9 +588,9 @@ void server_run_wait(miniserver * ms) {
   }
   */
   
-  fprintf(lfh, "Stopping Daemon (after receiving getchar=%d, ccnt=%d)\n", c, ccnt);
+  if (lfh) fprintf(lfh, "Stopping Daemon based on pause() returning on signal.\n");
   if (ms->server) { MHD_stop_daemon (ms->server); }
-  if (lfh) { fprintf(lfh, "Closing logging to '%s'\n", ms->logfname); fclose(lfh); }
+  if (lfh) { fprintf(lfh, "Closing logging to '%s'\n", ms->logfname); fclose(lfh); ms->logfh = NULL; }
 }
 // sigprocmask() - solution for stopping MHD.
 // Atomically unblock signals and wait if a signal arrives while sigsuspend is active, it will be delivered
@@ -641,11 +663,15 @@ int main (int argc, char *argv[]) {
   char * logfn = "/tmp/procster.log";
   char * pidfn = "./procster.pid";
   FILE * fh = stdout;
-  if (logtofile) { fh = fopen(logfn, "wb"); setbuf(fh, NULL); }
+  if (logtofile) {
+    fh = fopen(logfn, "wb");
+    if (!fh) { fprintf(stderr, "Could not open log !\n"); return 1; }
+    setbuf(fh, NULL);
+  }
   // Refresh FD:s ? Systemd can capture output
   int piderr = savepid(json);
   //int piderr = savepid_simple(pidfn, getpid() );
-  if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); }
+  if (piderr) { fprintf(fh, "Error %d saving PID\n", piderr); return 1; }
   ///////////////////////////////
   
   daemon_launch(port, json);
@@ -653,12 +679,14 @@ int main (int argc, char *argv[]) {
   // NO: debug, reqdebug, daemon (passed from cli?), docroot (auto-probed by getcwd), user, group
   // OK" pidfn, possibly logfn, port
   miniserver * ms = calloc(1, sizeof (struct miniserver)); // server_new(json); // large JSON loading func in ms/miniserver.c
+  if (!ms) { return 1; }
   ms->logfh = fh; ms->server = NULL; // Make daemon_launch return MHD server ?
   if (logtofile) { ms->logfname = strdup(logfn); }
   // TODO: copy / inline here: server_run_wait_procster() ?
-  fprintf(fh, "Starting server_run_wait()\n");
-  //server_run_wait(ms); // microthhpd getchar() workarounds In ms/miniserver.c.
-  server_run_wait_sigproc(ms);
+  if (ms->logfh) fprintf(ms->logfh, "Starting server_run_wait() or server_run_wait_sigproc()\n");
+  server_run_wait(ms); // microthhpd getchar() workarounds In ms/miniserver.c.
+  //server_run_wait_sigproc(ms);
+  if (ms->logfh) fprintf(ms->logfh, "Returned from server_run_wait() or server_run_wait_sigproc()\n");
   return 0;
 }
 
