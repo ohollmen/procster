@@ -35,6 +35,10 @@ ifeq ($(analyze), 1)
   CFLAGS += -fanalyzer -O0
   $(info >>> Static Analysis Enabled <<<)
 endif
+ifeq ($(debugsyms), 1)
+  CFLAGS += -ggdb
+  $(info >>> Debug Symbols Enabled <<<)
+endif
 #-include .env
 # .ONESHELL:
 all: libs main
