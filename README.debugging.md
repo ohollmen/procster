@@ -1,8 +1,8 @@
 ## Debugging and Profiling The Procster
 
-### Compiling with gcc debug sysmbols
+### Compiling with gcc debug symbols
 
-Compile (proclist CLI utility) with debug info (-g / -ggdb). Add this option into the Makefile line "CC=gcc ...".
+Compile (proclist CLI utility) with debug info (-g / -ggdb). Add this option into the Makefile line "CC=gcc ..." (or CFLAGS=...).
 
 To prevent the above "Makefile hack" from becoming permanent, after you debug / profiling session revert the hack by:
 ```
