@@ -331,8 +331,9 @@ struct MHD_Response * trystatic(const char * url) {
   if (fd < 0) { return 0; }
   struct stat statbuf = {0};
   int sok = fstat(fd, &statbuf);
-  if (sok < 0) { close(fd); return 0; } // Must close() !
+  if (sok < 0) { close(fd); return NULL; } // Must close() !
   uint64_t size = statbuf.st_size; // off_t
+  if (!S_ISREG(statbuf.st_mode)) { close(fd); return NULL; }
   printf("Ready to create response from fd: %d (%ld B)\n", fd, size);
   // MHD will close fd after. Note also _from_fd_at_offset(..., offset)
   struct MHD_Response * mhd_response = MHD_create_response_from_fd(size, fd); // Model
