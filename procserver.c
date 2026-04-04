@@ -76,6 +76,7 @@ void sigterm_handler(int signum) {
 
 
 char docroot[256] = {0};
+char * authtoken = NULL; // "secret-123"; // Get from ...
 typedef struct miniserver miniserver;
 // Local minimalistic version server struct
 struct miniserver {
@@ -362,14 +363,13 @@ int basic_creds_ok(struct MHD_Connection *connection) {
   return 1;
 }
 
-/** MHD Response handler for creating OS Process listing.
+/** MHD Response handler (of type MHD_AccessHandlerCallback) for creating OS Process listing.
 * Provides an example of simple GET handling of HTTP Request.
 * Note: size_t *upload_data_size type fixed to long unsigned int * (compiled, but warned)
 */
 int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,
     const char *upload_data, long unsigned int *upload_data_size, void **con_cls) {
-  // const char *page  = "<html><body>Hello, browser!</body></html>";
   struct MHD_Response * response = NULL;
   int ret; // = MHD_YES; // See: /usr/include/microhttpd.h => MHD_NO = 0, MHD_YES = 1
   int memmode = MHD_RESPMEM_PERSISTENT; // enum MHD_ResponseMemoryMode (MHD_RESPMEM_*: PERSISTENT, MUST_FREE, MUST_COPY )
@@ -384,21 +384,29 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   int ok = 0; // Must be early to not "pass initialization" (cov)
   int httpcode = MHD_HTTP_OK;
   // Check headers for auth
-  /*
-  char * authtoken = "secret-123"; // Get from ...
-  if (*con_cls == NULL) {
-    const char *token = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "x-api-token");
-    if (token == NULL || strcmp(token, authtoken)) {
+
+
+  if ((*con_cls == NULL) && authtoken) {
+    const char *reqtoken = MHD_lookup_connection_value(connection, MHD_HEADER_KIND, "x-api-key");
+    if (reqtoken == NULL || strcmp(reqtoken, authtoken)) { // not given or wrong token value ...
+      fprintf(stderr, "Check auth (x-api-key) w. authtoken: %s, reqtoken: %s\n", authtoken, reqtoken);
       struct MHD_Response *response = MHD_create_response_from_buffer(12, "Unauthorized", MHD_RESPMEM_PERSISTENT);
       enum MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_UNAUTHORIZED, response);
+      fprintf(stderr, "Queued failed auth-resp with MHD rc: %d\n", ret);
       MHD_destroy_response(response);
-      return ret; // Terminate early
+      return MHD_YES; // Terminate early. Should we ret MHD_NO (0) ? Do not - as This will cause "The connection was reset" on client
+      // which means socket was disconnected abruptly.
     }
+    // Suggestion (for MHD_AccessHandlerCallback multi-calls):
     // Mark as "Authorized" so we don't re-check headers on next calls for this req.
-    *con_cls = (void*)1; // con_cls not used (for useful things) in this handler.
-    return MHD_YES;
+    // Counter NOTE: On the other hand in 100% GET (method) application and single pass call to MHD_AccessHandlerCallback
+    // we should never promote second call to MHD_AccessHandlerCallback, but just "keep going" with GET request
+    // and fullfill request in a single pass/call.
+    // NOT: *con_cls = (void*)1; // con_cls not used (for useful things) in this handler.
+    // NOT: return MHD_YES;
+     fprintf(stderr, "Seems auth succeeded\n");
   }
-  */
+
   // MHD_get_connection_values (connection, MHD_HEADER_KIND, print_out_key, NULL);
   if ( !strcmp(url, "/proclist")) {
     //
@@ -640,7 +648,7 @@ int main (int argc, char *argv[]) {
   /* the error variable contains error information */
   char homeconfig[256] = {0};
   snprintf(homeconfig, 255, "%s/procster.conf.json", getenv("HOME") ?  getenv("HOME"): "/tmp");
-  char * configlocs[] = {"/etc/procster/procster.conf.json", homeconfig, "./procster.conf.json", NULL};
+  char * configlocs[] = {"./procster.conf.json", homeconfig, "/etc/procster/procster.conf.json", NULL};
   char * cfgfn = NULL;
   json_t * json = NULL;
   for (int i = 0;configlocs[i];i++) {
@@ -651,8 +659,24 @@ int main (int argc, char *argv[]) {
     if (!json) { printf("JSON parsing error: %s\n", error.text); cfgfn = NULL; continue; }
     else { printf("Parsed JSON: %llu\n", (unsigned long long)json); break; }
   }
-  if (!cfgfn) { printf("Could not find procster.conf.json from any of the locations.\n"); return 3; }
+  if (!cfgfn || !json) { printf("Could not find valid procster.conf.json from any of the locations.\n"); return 3; }
   printf("Running based on config file from: '%s'\n", cfgfn);
+  // Auth token ? From config or env
+  char * atok_src = NULL;
+  if (json) {
+    json_t * atok_j = json_object_get(json, "authtoken");
+    printf("Got property authtoken (%p) from: '%s'\n", atok_j, cfgfn);
+    if (atok_j) {
+      authtoken = json_string_value(atok_j);
+      atok_src = "configfile";
+      //printf("Settled on authtoken=%s from: '%s'\n", authtoken, cfgfn);
+      authtoken = strdup(authtoken);
+    }
+  }
+  // Don't assign directly to authtoken as this would erase config sourced value.
+  if ( (getenv("PROCSTER_AUTH_TOKEN")) ) { authtoken = getenv("PROCSTER_AUTH_TOKEN"); atok_src = "env"; }
+  // Test with e.g. curl -H 'x-api-key: secret' 'http://localhost:8181/proclist'
+  if (authtoken) { fprintf(stderr, "Got configured auth token: %s (from '%s', %ld B)\n", authtoken, atok_src, strlen(authtoken)); }
   if (!daemon) { goto RUN; }
   pid_t pid = fork(); // Parent: Child pid returned, Child: 0 ret'd
   if (pid < 0) { printf("Parent (PID: %d) exiting for failed fork (PID: %d) !!!\n", getpid(), pid); return 0;}
@@ -662,7 +686,7 @@ int main (int argc, char *argv[]) {
   //////////// Separate (local) logging and PID saving from essentials of daemon_launch
   logtofile = 1;
   char * logfn = "/tmp/procster.log";
-  char * pidfn = "./procster.pid";
+  // char * pidfn = "./procster.pid"; // Unused
   FILE * fh = stdout;
   if (logtofile) {
     fh = fopen(logfn, "wb");
