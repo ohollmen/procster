@@ -13,6 +13,7 @@
   "reqdebug": 1,
   "jpretty": 1,
   "appinit": "procster_init",
+  "authtokenXX": "S3cREcy",
   "params": {
     "alarmage": 86400
   }
