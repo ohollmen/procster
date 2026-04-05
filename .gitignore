@@ -27,6 +27,7 @@ proc2server
 procutil2
 .env
 .kateproject.ctags
+certs/
 # Coverity Static Analysis
 cov-int/
 procster.tar.xz
