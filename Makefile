@@ -39,6 +39,10 @@ ifeq ($(debugsyms), 1)
   CFLAGS += -ggdb
   $(info >>> Debug Symbols Enabled <<<)
 endif
+TLS_HOST_NAME?=$(shell hostname)
+# TODO:
+TLS_HOST_IP?=$(shell hostname -I)
+# TLS_HOST_IP?=$(shell ip addr show | grep 'inet ' | grep -v '127.0.0.1' | awk '{print $$2}' | cut -d/ -f1)
 #-include .env
 # .ONESHELL:
 all: libs main
@@ -194,3 +198,13 @@ package:
 	# dpkg-deb -c ../procster_*.deb
 	# Inspect package info / metadata
 	# dpkg-deb -I ../procster_*.deb
+makecert:
+	mkdir -p certs
+	# Simple (No subjectAltName)
+	#openssl req -x509 -newkey rsa:4096 -nodes -sha256 -keyout certs/domain.key -days 365 -out certs/domain.crt -subj "/CN=$(TLS_HOST_NAME)"
+	# Preferred, modern, required by many clients.
+	openssl req -x509 -newkey rsa:4096 -nodes -sha256 -keyout certs/domain.key -days 365 -out certs/domain.crt -subj "/CN=$(TLS_HOST_NAME)" \
+	   -addext "subjectAltName=DNS:$(TLS_HOST_NAME),IP:$(TLS_HOST_IP)"
+	ls -al certs
+showcert:
+	openssl x509 -text -noout -in certs/domain.crt
