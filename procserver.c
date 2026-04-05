@@ -450,7 +450,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
 #endif
     // "Resource \"root\" is not freed or pointed-to in \"ptree_free\"."
     json_decref(obj); // obj = NULL; // Model ?
-    CHECKPAGE:
+    //CHECKPAGE: // Unused
     if (!page || !*page) {
       printf("Failed to produce content for client !\n"); page = errpage; memmode = MHD_RESPMEM_MUST_COPY; // Error
     }
@@ -458,7 +458,7 @@ int answer_to_connection0 (void *cls, struct MHD_Connection *connection,
   // Others: /uptime (/proc/uptime) /loadavg /proc/loadavg
   // Match
   else if (!strncmp(url, "/kill/", 6)) {
-    char pidstr[20] = {0};
+    // char pidstr[20] = {0}; // Unused
     int pid = pid_extract(url);
     if (pid) {
       printf("Got valid pid: %d\n", pid);
@@ -544,42 +544,107 @@ int savepid_simple(char * pidfn, int pid) {
 }
 // OLD: daemon_prep()
 
+char * loadfile(const char * fn, int nullterm) {
+  struct stat statbuf = {0};
+  int fd = open(fn, O_RDONLY);
+  if (fd < 0) { printf("loadfile: open('%s') failed\n", fn); return NULL; }
+  int sok = fstat(fd, &statbuf);
+  if (sok < 0) { printf("fstat() failed\n"); return NULL; }
+  uint64_t size = statbuf.st_size; // off_t
+  // CWE-400: Uncontrolled Resource Consumption. Need to check "reasonable" file size
+  if (size > 1000000000) { return NULL; }
+  char * buf = calloc(size+1, sizeof(char)); // Always reserve for null-byte. malloc ?
+  ssize_t rsize = read(fd, buf, (size_t)size);
+  if (rsize < 0) { printf("read(fd, %ld) failed (<0)\n", size); return NULL; }
+  if (rsize < size) { printf("read() failed (rsize<size)\n"); return NULL; }
+  return buf;
+}
+
+// Add an item
+void options_add(struct MHD_OptionItem * mhd_opts, int idx, struct MHD_OptionItem * opt) {
+  // val=%p
+  printf("Adding option: %d (type=%d, val=%ld, ptr_val=%p)\n", idx, opt->option, opt->value, opt->ptr_value);
+
+  memcpy( &(mhd_opts[idx]), opt, sizeof(struct MHD_OptionItem) );
+}
+
 /** Launch Procster MHD server (the old non-framework version, used by old main()).
+ * Fixed options:
+ * - flags, port (2)
+ * - cl_connect_cb (MHD_AcceptPolicyCallback), server_userdata (2)
+ * - req_handler_cb (MHD_AccessHandlerCallback), server_userdata (2)
+ * After the above 6 fixed params, variable args start.
+ * - Must have token for each to indicate what follows (e.g. MHD_OPTION_NOTIFY_COMPLETED, cb, userdata - 3 params total)
+ * - Each token like MHD_OPTION_NOTIFY_COMPLETED defines how many follow (e.g. 2 above for total 3 params)
+ * - The varagrs should always end with MHD_OPTION_END (last argument) to tell MHD about variable options termination.
+ * - Generic (and best) way to pass options is MHD_OPTION_ARRAY, followed by array mhd_opts and MHD_OPTION_END
+ *   - mhd_opts is array of MHD_OptionItem
  */
 void daemon_launch(int port, json_t * json) {
   // OLD Log and PID
-  
-  // apc - Accept Policy Callback
+  #define OPTS_CAPA 6 // 12
+  int optcnt = 0;
+  struct MHD_OptionItem mhd_opts[OPTS_CAPA] = {0};
+  // struct MHD_OptionItem opt_... = {MHD_OPTION_NOTIFY_COMPLETED, (intptr_t)ms_req_term_cb, (void*)s}, 0
+  // struct MHD_OptionItem opt_credtype = {MHD_OPTION_HTTPS_CRED_TYPE, 1, NULL};
+  // struct MHD_OptionItem opt_cipherlist = {MHD_OPTION_HTTPS_CIPHER_LIST, "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384", NULL};
+  // NOT: struct MHD_OptionItem opt_memtrust = {MHD_OPTION_HTTPS_MEM_TRUST, NULL, NULL};
+  struct MHD_OptionItem opt_term = { MHD_OPTION_END, 0, /*0xFF,*/ NULL }; // MHD_OPTION_END = 0,
+   fprintf(stderr, "Starting daemon_launch()\n");
+  // struct MHD_OptionItem opt_req_term_cb = {MHD_OPTION_NOTIFY_COMPLETED, (intptr_t)ms_req_term_cb, (void*)s}, 0}
+  // Check cert availability (TODO: From config)
+  char * crtfn = "./certs/domain.crt";
+  char * keyfn = "./certs/domain.key";
+  char * crtcont = NULL;char * keycont = NULL;
   // TODO: Have this as config string (or array) member in JSON file (e.g. "mhdrunflags")
   // MHD_USE_TCP_FASTOPEN, MHD_USE_AUTO (poll mode), MHD_USE_DEBUG == MHD_USE_ERROR_LOG
-  int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD; 
+  // int flags = MHD_USE_SELECT_INTERNALLY | MHD_USE_INTERNAL_POLLING_THREAD;
+  int flags = MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_AUTO; // For auto / epoll
+  // TODO: Test features first ?: https://www.gnu.org/software/libmicrohttpd/manual/html_node/microhttpd_002dutil-feature.html
+  if (!access(crtfn, F_OK)) { fprintf(stderr, "Try load CRT (%s)\n", crtfn); crtcont = loadfile(crtfn, 1); }
+  if (!access(keyfn, F_OK)) { fprintf(stderr, "Try load KEY (%s)\n", keyfn); keycont = loadfile(keyfn, 1); }
+  if (crtcont && keycont) {
+    // Enables:  MHD_OPTION_HTTPS_MEM_KEY, MHD_OPTION_HTTPS_MEM_CERT, MHD_OPTION_HTTPS_MEM_TRUST, MHD_OPTION_HTTPS_MEM_DHPARAMS,
+    // MHD_OPTION_HTTPS_CRED_TYPE, MHD_OPTION_HTTPS_PRIORITIES
+    int tlsok = MHD_is_feature_supported(MHD_FEATURE_SSL); // Shows 1 in fprintf() below for Ubuntu 24.04
+    fprintf(stderr, "Got cert(%ld) and key(%ld). Feature-SSL: %d\n", strlen(crtcont), strlen(keycont), tlsok);
+    struct MHD_OptionItem ssl_opts[] = { // Note: In below items must use ptr_value (not value) for content.
+      {MHD_OPTION_HTTPS_MEM_CERT, (intptr_t)0, crtcont},
+      {MHD_OPTION_HTTPS_MEM_KEY,  (intptr_t)0, keycont},
+      // {MHD_OPTION_HTTPS_CRED_TYPE, 1, NULL} // Do we need this ?
+      //{ MHD_OPTION_HTTPS_PRIORITIES, 0, "NORMAL:-VERS-SSL3.0:-VERS-TLS1.0:-VERS-TLS1.1" },
+      { MHD_OPTION_HTTPS_PRIORITIES, 0, "NORMAL:-VERS-ALL:+VERS-TLS1.2:+VERS-TLS1.3"}, // More modern / strict
+    };
+    // options_add(mhd_opts, index, optptr) is a wrapper for setting otions in mhd_opts - array (by memcpy())
+    options_add(mhd_opts, optcnt, &( ssl_opts[0] )); optcnt++;
+    options_add(mhd_opts, optcnt, &( ssl_opts[1] )); optcnt++;
+    options_add(mhd_opts, optcnt, &( ssl_opts[2] )); optcnt++;
+    // NOT: options_add(mhd_opts, optcnt, &( opt_memtrust )); optcnt++;
+    // opt_cipherlist ... MHD_OPTION_HTTPS_CIPHER_LIST not known to Ubuntu 24.04 microhttpd
+
+    //  //options_add(mhd_opts, optcnt, &( ssl_opts[2] )); optcnt++;
+    port = 8443; // .. OR maybe tls.port from config ????
+    flags |= MHD_USE_TLS; // Enable TLS !!!
+  }
+  options_add(mhd_opts, optcnt, &opt_term ); optcnt++;
+  //options_add(mhd_opts, optcnt, &opt_req_term_cb ); optcnt++; // Add req term CB ?
+  //DONECERT: // Unused
+  // apc - Accept Policy Callback
+
   struct MHD_Daemon * mhd = MHD_start_daemon (flags, port, NULL, NULL,
-    // NOTE: Connection handler: answer_to_connection*
-    (MHD_AccessHandlerCallback)&answer_to_connection0, NULL,
-    MHD_OPTION_NOTIFY_COMPLETED,
+    (MHD_AccessHandlerCallback)&answer_to_connection0, NULL, // Could pass server-instance
+    MHD_OPTION_ARRAY, mhd_opts, // All options in single array !!!
+    MHD_OPTION_END);
+  /*
+    MHD_OPTION_NOTIFY_COMPLETED, // followed by: request_complete_cb (MHD_NotifyConnectionCallback), closure obj
     NULL, NULL, // req_term_cb, userdata MHD Manual p. 18 ()
-    
-    MHD_OPTION_END); 
+    */
   FILE * fh = stderr; // TODO: 
   if (NULL == mhd) { fprintf(fh, "Could not start MHD (check if port %d is taken)\n", port); } // return 3; 
-  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: http://localhost:%d/proclist)\n", port, getpid(), port);
-  int ok = 100; // MHD_run(mhd); // MHD_YES on succ
-  // Note:
-  // - Starting w. systemd we always receive EOF (-1) here immediately (!?)
-  // Starting from terminal (even with --daemon) we receieve the char we first typed, even if *only*
-  // '\n' triggers return (line-buffering).
-  //(void) getchar ();
-  //int c = getchar();
-  
-  /*
-  int c;
-  // 
-  while (c = getchar()) {
-    if (c == 255) { break; }
-  }
-  fprintf(fh, "Stopping Daemon (getchar=%d, ok=%d)\n", c, ok);
-  MHD_stop_daemon (mhd);
-  */
+  fprintf(fh, "Starting Micro HTTP daemon at port=%d, pid=%d (Try: %s://localhost:%d/proclist)\n",
+           port, getpid(), ((crtcont && keycont) ? "https": "http"), port);
+  // int ok = 100; // Unused // MHD_run(mhd); // MHD_YES on succ
+  return;
 }
 // Loaner from external fw to let MHD run as persistent server 
 void server_run_wait(miniserver * ms) {
@@ -605,8 +670,8 @@ void server_run_wait(miniserver * ms) {
 // Atomically unblock signals and wait if a signal arrives while sigsuspend is active, it will be delivered
 // and the handler will be called, setting keep_running = 0. sigsuspend will then return, and the loop will terminate.
 void server_run_wait_sigproc(miniserver * ms) {
-  int ret = 0;
-  sigset_t  block_mask, old_mask, empty_mask; // 3 mask sets
+  // int ret = 0; // Unused
+  sigset_t    empty_mask; //block_mask, old_mask; (unused) // 3 => 1 mask sets
   if (!ms) { return; }
   // Set the signal mask, saving the old one
   // SIG_BLOCK - block, modify, SIG_UNBLOCK - unblock, modify, SIG_SETMASK - set explictly 1-by-1
@@ -667,7 +732,7 @@ int main (int argc, char *argv[]) {
     json_t * atok_j = json_object_get(json, "authtoken");
     printf("Got property authtoken (%p) from: '%s'\n", atok_j, cfgfn);
     if (atok_j) {
-      authtoken = json_string_value(atok_j);
+      authtoken = (char*)json_string_value(atok_j);
       atok_src = "configfile";
       //printf("Settled on authtoken=%s from: '%s'\n", authtoken, cfgfn);
       authtoken = strdup(authtoken);
